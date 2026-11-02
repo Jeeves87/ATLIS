@@ -1,0 +1,417 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+const on = (channel: string) => (cb: (payload: unknown) => void) => {
+  const handler = (_e: Electron.IpcRendererEvent, payload: unknown) => cb(payload)
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
+}
+
+const api = {
+  sessions: {
+    list: () => ipcRenderer.invoke('sessions:list'),
+    create: (opts: unknown) => ipcRenderer.invoke('sessions:create', opts),
+    update: (id: string, patch: unknown) => ipcRenderer.invoke('sessions:update', id, patch),
+    remove: (id: string) => ipcRenderer.invoke('sessions:delete', id)
+  },
+  messages: {
+    list: (sessionId: string) => ipcRenderer.invoke('messages:list', sessionId)
+  },
+  chat: {
+    send: (sessionId: string, md: string, html: string, attachments?: unknown) =>
+      ipcRenderer.invoke('chat:send', sessionId, md, html, attachments),
+    stop: (sessionId: string) => ipcRenderer.invoke('chat:stop', sessionId),
+    running: (sessionId: string) => ipcRenderer.invoke('chat:running', sessionId),
+    roundtableContinue: (sessionId: string, rounds?: number) => ipcRenderer.invoke('chat:roundtableContinue', sessionId, rounds),
+    onEvent: on('chat:event')
+  },
+  mcp: {
+    status: () => ipcRenderer.invoke('mcp:status'),
+    getConfig: () => ipcRenderer.invoke('mcp:getConfig'),
+    setConfig: (servers: unknown) => ipcRenderer.invoke('mcp:setConfig', servers),
+    reload: () => ipcRenderer.invoke('mcp:reload'),
+    onChanged: on('mcp:changed')
+  },
+  apps: {
+    status: () => ipcRenderer.invoke('apps:status'),
+    getConfig: () => ipcRenderer.invoke('apps:getConfig'),
+    setConfig: (configs: unknown) => ipcRenderer.invoke('apps:setConfig', configs),
+    launch: (name: string) => ipcRenderer.invoke('apps:launch', name),
+    stop: (name: string) => ipcRenderer.invoke('apps:stop', name),
+    logs: (name: string, tailChars?: number) => ipcRenderer.invoke('apps:logs', name, tailChars),
+    openUi: (name: string) => ipcRenderer.invoke('apps:openUi', name),
+    onChanged: on('apps:changed')
+  },
+  desktop: {
+    status: () => ipcRenderer.invoke('desktop:status'),
+    getConfig: () => ipcRenderer.invoke('desktop:getConfig'),
+    setConfig: (configs: unknown) => ipcRenderer.invoke('desktop:setConfig', configs),
+    launch: (name: string) => ipcRenderer.invoke('desktop:launch', name),
+    stop: (name: string) => ipcRenderer.invoke('desktop:stop', name),
+    screenshot: (name: string) => ipcRenderer.invoke('desktop:screenshot', name),
+    click: (name: string, x: number, y: number, button?: 'left' | 'right', doubleClick?: boolean) => ipcRenderer.invoke('desktop:click', name, x, y, button, doubleClick),
+    type: (name: string, text: string, submit?: boolean) => ipcRenderer.invoke('desktop:type', name, text, submit),
+    key: (name: string, keys: string) => ipcRenderer.invoke('desktop:key', name, keys)
+  },
+  arena: {
+    start: (opts: unknown) => ipcRenderer.invoke('arena:start', opts),
+    stop: (id: string) => ipcRenderer.invoke('arena:stop', id),
+    vote: (id: string, winner: string) => ipcRenderer.invoke('arena:vote', id, winner),
+    list: (limit?: number) => ipcRenderer.invoke('arena:list', limit),
+    get: (id: string) => ipcRenderer.invoke('arena:get', id),
+    remove: (id: string) => ipcRenderer.invoke('arena:delete', id),
+    leaderboard: () => ipcRenderer.invoke('arena:leaderboard'),
+    onEvent: on('arena:event')
+  },
+  providers: {
+    list: () => ipcRenderer.invoke('providers:list'),
+    models: (providerId: string) => ipcRenderer.invoke('providers:models', providerId)
+  },
+  browser: {
+    navigate: (url: string) => ipcRenderer.invoke('browser:navigate', url),
+    back: () => ipcRenderer.invoke('browser:back'),
+    forward: () => ipcRenderer.invoke('browser:forward'),
+    reload: () => ipcRenderer.invoke('browser:reload'),
+    devtools: () => ipcRenderer.invoke('browser:devtools'),
+    setBounds: (b: unknown) => ipcRenderer.invoke('browser:setBounds', b),
+    setVisible: (v: boolean) => ipcRenderer.invoke('browser:setVisible', v),
+    state: () => ipcRenderer.invoke('browser:state'),
+    newTab: (url?: string, background?: boolean) => ipcRenderer.invoke('browser:newTab', url, background),
+    closeTab: (id: string) => ipcRenderer.invoke('browser:closeTab', id),
+    activateTab: (id: string) => ipcRenderer.invoke('browser:activateTab', id),
+    suspend: (on: boolean) => ipcRenderer.invoke('browser:suspend', on),
+    folderMenu: (items: unknown, x: number, y: number) => ipcRenderer.invoke('browser:folderMenu', items, x, y),
+    bookmarkSources: () => ipcRenderer.invoke('browser:bookmarkSources'),
+    bookmarkTree: (profilePath: string) => ipcRenderer.invoke('browser:bookmarkTree', profilePath),
+    capturePage: () => ipcRenderer.invoke('browser:capturePage'),
+    saveAsDoc: () => ipcRenderer.invoke('browser:saveAsDoc'),
+    onState: on('browser:state'),
+    onFocusAddress: on('browser:focus-address')
+  },
+  settings: {
+    getAll: () => ipcRenderer.invoke('settings:getAll'),
+    set: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)
+  },
+  ui: {
+    getZoom: () => ipcRenderer.invoke('ui:getZoom'),
+    setZoom: (z: number) => ipcRenderer.invoke('ui:setZoom', z),
+    stepZoom: (dir: number) => ipcRenderer.invoke('ui:stepZoom', dir),
+    onZoom: on('ui:zoom')
+  },
+  projects: {
+    list: () => ipcRenderer.invoke('projects:list'),
+    create: (name: string, color: string) => ipcRenderer.invoke('projects:create', name, color),
+    remove: (id: string) => ipcRenderer.invoke('projects:delete', id)
+  },
+  media: {
+    setOpen: (open: boolean) => ipcRenderer.invoke('media:setOpen', open),
+    setBounds: (b: unknown) => ipcRenderer.invoke('media:setBounds', b),
+    state: () => ipcRenderer.invoke('media:state'),
+    onState: on('media:state')
+  },
+  planner: {
+    events: {
+      create: (event: unknown) => ipcRenderer.invoke('planner:events:create', event),
+      list: (startAt: number, endAt: number, query?: string) => ipcRenderer.invoke('planner:events:list', startAt, endAt, query),
+      update: (id: string, patch: unknown) => ipcRenderer.invoke('planner:events:update', id, patch),
+      remove: (id: string) => ipcRenderer.invoke('planner:events:delete', id)
+    },
+    todos: {
+      create: (todo: unknown) => ipcRenderer.invoke('planner:todos:create', todo),
+      list: (filter?: unknown) => ipcRenderer.invoke('planner:todos:list', filter),
+      update: (id: string, patch: unknown) => ipcRenderer.invoke('planner:todos:update', id, patch),
+      complete: (id: string) => ipcRenderer.invoke('planner:todos:complete', id),
+      remove: (id: string) => ipcRenderer.invoke('planner:todos:delete', id)
+    },
+    reminders: {
+      create: (reminder: unknown) => ipcRenderer.invoke('planner:reminders:create', reminder),
+      list: (startAt?: number, endAt?: number, status?: string) => ipcRenderer.invoke('planner:reminders:list', startAt, endAt, status),
+      update: (id: string, patch: unknown) => ipcRenderer.invoke('planner:reminders:update', id, patch),
+      remove: (id: string) => ipcRenderer.invoke('planner:reminders:delete', id)
+    },
+    onChanged: on('planner:changed')
+  },
+  agentZoo: {
+    list: () => ipcRenderer.invoke('agentZoo:list'),
+    read: (path: string) => ipcRenderer.invoke('agentZoo:read', path),
+    save: (path: string, content: string) => ipcRenderer.invoke('agentZoo:save', path, content),
+    createAgent: (input: unknown) => ipcRenderer.invoke('agentZoo:createAgent', input)
+  },
+  docs: {
+    list: () => ipcRenderer.invoke('docs:list'),
+    get: (id: string) => ipcRenderer.invoke('docs:get', id),
+    save: (doc: unknown) => ipcRenderer.invoke('docs:save', doc),
+    remove: (id: string) => ipcRenderer.invoke('docs:delete', id),
+    toMarkdown: (html: string) => ipcRenderer.invoke('docs:toMarkdown', html),
+    toHtml: (md: string) => ipcRenderer.invoke('docs:toHtml', md),
+    onChanged: on('docs:changed')
+  },
+  feed: {
+    sources: () => ipcRenderer.invoke('feed:sources:list'),
+    addSource: (input: string, category?: string | null) => ipcRenderer.invoke('feed:sources:add', input, category),
+    updateSource: (id: string, patch: unknown) => ipcRenderer.invoke('feed:sources:update', id, patch),
+    removeSource: (id: string) => ipcRenderer.invoke('feed:sources:remove', id),
+    unreadCounts: () => ipcRenderer.invoke('feed:unreadCounts'),
+    refresh: (sourceId?: string) => ipcRenderer.invoke('feed:refresh', sourceId),
+    items: (opt?: unknown) => ipcRenderer.invoke('feed:items', opt),
+    setItemState: (id: string, patch: unknown) => ipcRenderer.invoke('feed:item:setState', id, patch),
+    markRead: (sourceId?: string) => ipcRenderer.invoke('feed:markRead', sourceId),
+    openItem: (id: string) => ipcRenderer.invoke('feed:openItem', id),
+    onChanged: on('feed:changed')
+  },
+  vault: {
+    items: () => ipcRenderer.invoke('vault:items'),
+    createItem: (input: unknown) => ipcRenderer.invoke('vault:item:create', input),
+    updateItem: (id: string, patch: unknown) => ipcRenderer.invoke('vault:item:update', id, patch),
+    removeItem: (id: string) => ipcRenderer.invoke('vault:item:delete', id),
+    addPhoto: (id: string, photo: unknown) => ipcRenderer.invoke('vault:item:addPhoto', id, photo),
+    removePhoto: (id: string, attachmentId: string) => ipcRenderer.invoke('vault:item:removePhoto', id, attachmentId),
+    addValuation: (input: unknown) => ipcRenderer.invoke('vault:valuation:add', input),
+    valuations: (itemId: string, kind?: string) => ipcRenderer.invoke('vault:valuations', itemId, kind),
+    latest: () => ipcRenderer.invoke('vault:latest'),
+    spot: (force?: boolean) => ipcRenderer.invoke('vault:spot', force),
+    refreshMelt: () => ipcRenderer.invoke('vault:refreshMelt'),
+    onChanged: on('vault:changed')
+  },
+  land: {
+    regions: () => ipcRenderer.invoke('land:regions'),
+    job: () => ipcRenderer.invoke('land:job'),
+    cancel: () => ipcRenderer.invoke('land:cancel'),
+    verifySources: () => ipcRenderer.invoke('land:verifySources'),
+    ingest: (fips: string) => ipcRenderer.invoke('land:ingest', fips),
+    markCandidates: (fips: string, filter?: unknown) => ipcRenderer.invoke('land:markCandidates', fips, filter),
+    enrich: (fips: string, opts?: unknown) => ipcRenderer.invoke('land:enrich', fips, opts),
+    rescore: (fips: string) => ipcRenderer.invoke('land:rescore', fips),
+    assess: (fips: string, year?: number) => ipcRenderer.invoke('land:assess', fips, year),
+    anchors: () => ipcRenderer.invoke('land:anchors'),
+    saveAnchor: (a: unknown) => ipcRenderer.invoke('land:saveAnchor', a),
+    deleteAnchor: (id: string) => ipcRenderer.invoke('land:deleteAnchor', id),
+    geocode: (address: string) => ipcRenderer.invoke('land:geocode', address),
+    fitRegion: (fips: string) => ipcRenderer.invoke('land:fitRegion', fips),
+    route: (from: unknown, to: unknown) => ipcRenderer.invoke('land:route', from, to),
+    amenitySpecs: () => ipcRenderer.invoke('land:amenitySpecs'),
+    absentee: (query: unknown) => ipcRenderer.invoke('land:absentee', query),
+    comparable: (lon: number, lat: number) => ipcRenderer.invoke('land:comparable', lon, lat),
+    parcels: (query: unknown) => ipcRenderer.invoke('land:parcels', query),
+    parcel: (id: string) => ipcRenderer.invoke('land:parcel', id),
+    weights: () => ipcRenderer.invoke('land:weights'),
+    setWeights: (w: unknown) => ipcRenderer.invoke('land:setWeights', w),
+    listings: (status?: string) => ipcRenderer.invoke('land:listings', status),
+    saveListing: (l: unknown) => ipcRenderer.invoke('land:saveListing', l),
+    deleteListing: (id: string) => ipcRenderer.invoke('land:deleteListing', id),
+    utilities: (fips?: string) => ipcRenderer.invoke('land:utilities', fips),
+    saveUtility: (u: unknown) => ipcRenderer.invoke('land:saveUtility', u),
+    onProgress: on('land:progress')
+  },
+  mtg: {
+    search: (query: string) => ipcRenderer.invoke('mtg:search', query),
+    searchSealed: (query: string) => ipcRenderer.invoke('mtg:searchSealed', query),
+    sets: () => ipcRenderer.invoke('mtg:sets'),
+    families: () => ipcRenderer.invoke('mtg:families'),
+    familyProducts: (code: string, opts?: { price?: boolean }) => ipcRenderer.invoke('mtg:familyProducts', code, opts),
+    upcoming: (aheadDays?: number) => ipcRenderer.invoke('mtg:upcoming', aheadDays),
+    syncSets: () => ipcRenderer.invoke('mtg:syncSets'),
+    watchlist: () => ipcRenderer.invoke('mtg:watchlist'),
+    lifecycleSettings: () => ipcRenderer.invoke('mtg:lifecycleSettings'),
+    setLifecycleSettings: (patch: unknown) => ipcRenderer.invoke('mtg:setLifecycleSettings', patch),
+    createWatch: (input: unknown) => ipcRenderer.invoke('mtg:watch:create', input),
+    updateWatch: (id: string, patch: unknown) => ipcRenderer.invoke('mtg:watch:update', id, patch),
+    removeWatch: (id: string) => ipcRenderer.invoke('mtg:watch:delete', id),
+    acquireWatch: (id: string, opts?: unknown) => ipcRenderer.invoke('mtg:watch:acquire', id, opts),
+    owned: () => ipcRenderer.invoke('mtg:owned'),
+    syncCardMeta: () => ipcRenderer.invoke('mtg:syncCardMeta'),
+    syncCedh: (force?: boolean) => ipcRenderer.invoke('mtg:syncCedh', !!force),
+    commanders: () => ipcRenderer.invoke('mtg:commanders'),
+    commanderStats: () => ipcRenderer.invoke('mtg:commanderStats'),
+    syncCommanders: () => ipcRenderer.invoke('mtg:syncCommanders'),
+    decks: () => ipcRenderer.invoke('mtg:decks'),
+    deck: (id: string) => ipcRenderer.invoke('mtg:deck', id),
+    deckCreate: (input: unknown) => ipcRenderer.invoke('mtg:deckCreate', input),
+    deckImport: (name: string, text: string) => ipcRenderer.invoke('mtg:deckImport', name, text),
+    deckSetCard: (id: string, card: unknown) => ipcRenderer.invoke('mtg:deckSetCard', id, card),
+    deckMoveCard: (id: string, name: string, to: string) => ipcRenderer.invoke('mtg:deckMoveCard', id, name, to),
+    deckRename: (id: string, name: string) => ipcRenderer.invoke('mtg:deckRename', id, name),
+    deckDelete: (id: string) => ipcRenderer.invoke('mtg:deckDelete', id),
+    deckCandidates: () => ipcRenderer.invoke('mtg:deckCandidates'),
+    deckFromSealed: (vaultId: string) => ipcRenderer.invoke('mtg:deckFromSealed', vaultId),
+    searchPrecons: (query: string) => ipcRenderer.invoke('mtg:searchPrecons', query),
+    deckFromPrecon: (fileName: string) => ipcRenderer.invoke('mtg:deckFromPrecon', fileName),
+    deckFromRipped: (product: string) => ipcRenderer.invoke('mtg:deckFromRipped', product),
+    gameReadiness: () => ipcRenderer.invoke('game:readiness'),
+    gameDecks: () => ipcRenderer.invoke('game:decks'),
+    gameStart: (opts: unknown) => ipcRenderer.invoke('game:start', opts),
+    gameSend: (cmd: unknown) => ipcRenderer.invoke('game:send', cmd),
+    gameStop: () => ipcRenderer.invoke('game:stop'),
+    onGameEvent: on('game:event'),
+    soundLibrary: () => ipcRenderer.invoke('sounds:library'),
+    soundSave: (settings: unknown) => ipcRenderer.invoke('sounds:save', settings),
+    soundImport: () => ipcRenderer.invoke('sounds:import'),
+    soundRemove: (name: string) => ipcRenderer.invoke('sounds:remove', name),
+    tableLook: () => ipcRenderer.invoke('table:look'),
+    tableSaveLook: (look: unknown) => ipcRenderer.invoke('table:saveLook', look),
+    tableImportMat: () => ipcRenderer.invoke('table:importMat'),
+    tableRemoveMat: (name: string) => ipcRenderer.invoke('table:removeMat', name),
+    forgeStatus: () => ipcRenderer.invoke('forge:status'),
+    forgeChooseDir: () => ipcRenderer.invoke('forge:chooseDir'),
+    forgeExport: () => ipcRenderer.invoke('forge:export'),
+    forgeLaunch: () => ipcRenderer.invoke('forge:launch'),
+    forgeOpenUrl: (url: string) => ipcRenderer.invoke('forge:openUrl', url),
+    deckRecs: (id: string) => ipcRenderer.invoke('mtg:deckRecs', id),
+    shoppingList: () => ipcRenderer.invoke('mtg:shoppingList'),
+    cedhMatches: () => ipcRenderer.invoke('mtg:cedhMatches'),
+    cedhList: (entryId: string) => ipcRenderer.invoke('mtg:cedhList', entryId),
+    cedhSaveDeck: (entryId: string) => ipcRenderer.invoke('mtg:cedhSaveDeck', entryId),
+    exploreCommanders: (limit?: number) => ipcRenderer.invoke('mtg:exploreCommanders', limit),
+    exploreCommander: (f: unknown) => ipcRenderer.invoke('mtg:exploreCommander', f),
+    exploreDeck: (ref: unknown) => ipcRenderer.invoke('mtg:exploreDeck', ref),
+    exploreSaveDeck: (ref: unknown) => ipcRenderer.invoke('mtg:exploreSaveDeck', ref),
+    syncCedhLists: (opts?: unknown) => ipcRenderer.invoke('mtg:syncCedhLists', opts),
+    sealedFollowed: () => ipcRenderer.invoke('mtg:sealedFollowed'),
+    followSealed: (code: string, follow?: boolean) => ipcRenderer.invoke('mtg:sealedFollow', code, follow),
+    sealedPrices: (setCode: string, days?: number) => ipcRenderer.invoke('mtg:sealedPrices', setCode, days),
+    refreshSealed: () => ipcRenderer.invoke('mtg:refreshSealed'),
+    secretLair: (days?: number) => ipcRenderer.invoke('mtg:secretLair', days),
+    secretLairUpcoming: () => ipcRenderer.invoke('mtg:secretLairUpcoming'),
+    syncSecretLair: () => ipcRenderer.invoke('mtg:syncSecretLair'),
+    valueSet: (query: string, force?: boolean) => ipcRenderer.invoke('mtg:valueSet', query, force),
+    valueCardList: (text: string, label?: string) => ipcRenderer.invoke('mtg:valueCardList', text, label),
+    cardInsights: (names: string[], reprintNames: string[], excludeSets: string[], excludeIds?: string[]) =>
+      ipcRenderer.invoke('mtg:cardInsights', names, reprintNames, excludeSets, excludeIds),
+    valueFromUrl: (url: string) => ipcRenderer.invoke('mtg:valueFromUrl', url),
+    packEv: (query: string, boosterType?: string, packPrice?: number) =>
+      ipcRenderer.invoke('mtg:packEv', query, boosterType, packPrice),
+    rebuildHistory: () => ipcRenderer.invoke('mtg:rebuildHistory'),
+    backfill: () => ipcRenderer.invoke('mtg:backfill'),
+    onBackfillProgress: on('mtg:backfillProgress'),
+    listings: (watchId?: string) => ipcRenderer.invoke('mtg:listings', watchId),
+    discover: (watchId: string) => ipcRenderer.invoke('mtg:discover', watchId),
+    addListing: (watchId: string, url: string) => ipcRenderer.invoke('mtg:listing:add', watchId, url),
+    removeListing: (id: string) => ipcRenderer.invoke('mtg:listing:remove', id),
+    preorderBoard: (aheadDays?: number) => ipcRenderer.invoke('mtg:preorderBoard', aheadDays),
+    scanPreorders: (aheadDays?: number) => ipcRenderer.invoke('mtg:scanPreorders', aheadDays),
+    onPreorderProgress: on('mtg:preorderProgress'),
+    sealedContents: (uuid: string, force?: boolean) => ipcRenderer.invoke('mtg:sealedContents', uuid, force),
+    productContents: (productId: string, setHint?: string | null) =>
+      ipcRenderer.invoke('mtg:productContents', productId, setHint),
+    ripSealed: (vaultId: string) => ipcRenderer.invoke('mtg:ripSealed', vaultId),
+    evBoard: () => ipcRenderer.invoke('mtg:evBoard'),
+    evScan: (opts?: unknown) => ipcRenderer.invoke('mtg:evScan', opts),
+    evReprice: () => ipcRenderer.invoke('mtg:evReprice'),
+    evForget: (uuid: string) => ipcRenderer.invoke('mtg:evForget', uuid),
+    onEvProgress: on('mtg:evProgress'),
+    deals: () => ipcRenderer.invoke('mtg:deals'),
+    dealThreshold: () => ipcRenderer.invoke('mtg:dealThreshold'),
+    setDealThreshold: (v: number) => ipcRenderer.invoke('mtg:setDealThreshold', v),
+    refreshStock: () => ipcRenderer.invoke('mtg:refreshStock'),
+    alertsEnabled: () => ipcRenderer.invoke('mtg:alertsEnabled'),
+    setAlertsEnabled: (on: boolean) => ipcRenderer.invoke('mtg:setAlertsEnabled', on),
+    prices: (extId: string, variant: string, limitDays?: number) =>
+      ipcRenderer.invoke('mtg:prices', extId, variant, limitDays),
+    refreshPrices: () => ipcRenderer.invoke('mtg:refreshPrices'),
+    onChanged: on('mtg:changed'),
+    onFocus: on('mtg:focus')
+  },
+  drops: {
+    watches: () => ipcRenderer.invoke('drops:watches'),
+    products: (watchId?: string, includeGone?: boolean) => ipcRenderer.invoke('drops:products', watchId, includeGone),
+    events: (opts?: unknown) => ipcRenderer.invoke('drops:events', opts),
+    unseen: () => ipcRenderer.invoke('drops:unseen'),
+    markSeen: (watchId?: string) => ipcRenderer.invoke('drops:markSeen', watchId),
+    add: (input: unknown) => ipcRenderer.invoke('drops:add', input),
+    update: (id: string, patch: unknown) => ipcRenderer.invoke('drops:update', id, patch),
+    remove: (id: string) => ipcRenderer.invoke('drops:remove', id),
+    poll: (watchId?: string) => ipcRenderer.invoke('drops:poll', watchId),
+    probe: (url: string) => ipcRenderer.invoke('drops:probe', url),
+    alertsEnabled: () => ipcRenderer.invoke('drops:alertsEnabled'),
+    setAlertsEnabled: (on: boolean) => ipcRenderer.invoke('drops:setAlertsEnabled', on),
+    onChanged: on('drops:changed'),
+    onFocus: on('drops:focus'),
+    candidateCounts: () => ipcRenderer.invoke('drops:candidateCounts'),
+    topCandidates: (limit?: number) => ipcRenderer.invoke('drops:topCandidates', limit),
+    discover: (opts?: unknown) => ipcRenderer.invoke('drops:discover', opts),
+    probeCandidates: (limit?: number) => ipcRenderer.invoke('drops:probeCandidates', limit),
+    promote: (count?: number, minScore?: number) => ipcRenderer.invoke('drops:promote', count, minScore),
+    score: () => ipcRenderer.invoke('drops:score')
+  },
+  discordBot: {
+    status: () => ipcRenderer.invoke('discordBot:status'),
+    config: () => ipcRenderer.invoke('discordBot:config'),
+    setConfig: (patch: unknown) => ipcRenderer.invoke('discordBot:setConfig', patch),
+    restart: () => ipcRenderer.invoke('discordBot:restart'),
+    onChanged: on('discordBot:changed')
+  },
+  alerts: {
+    config: () => ipcRenderer.invoke('alerts:config'),
+    setDiscord: (patch: { webhook?: string; mention?: string }) => ipcRenderer.invoke('alerts:setDiscord', patch),
+    test: () => ipcRenderer.invoke('alerts:test')
+  },
+  tcg: {
+    games: () => ipcRenderer.invoke('tcg:games'),
+    counts: () => ipcRenderer.invoke('tcg:counts'),
+    search: (input: unknown) => ipcRenderer.invoke('tcg:search', input),
+    sets: (game: string) => ipcRenderer.invoke('tcg:sets', game),
+    set: (game: string, set: string) => ipcRenderer.invoke('tcg:set', game, set),
+    watches: (game?: string) => ipcRenderer.invoke('tcg:watches', game),
+    add: (input: unknown) => ipcRenderer.invoke('tcg:add', input),
+    ownSealed: (input: unknown) => ipcRenderer.invoke('tcg:ownSealed', input),
+    update: (id: string, patch: unknown) => ipcRenderer.invoke('tcg:update', id, patch),
+    remove: (id: string) => ipcRenderer.invoke('tcg:remove', id),
+    history: (id: string) => ipcRenderer.invoke('tcg:history', id),
+    quote: (productId: string) => ipcRenderer.invoke('tcg:quote', productId),
+    check: (target?: unknown) => ipcRenderer.invoke('tcg:check', target ?? {}),
+    onChanged: on('tcg:changed')
+  },
+  signals: {
+    terms: () => ipcRenderer.invoke('signals:terms'),
+    read: (termId: string, windowDays?: number) => ipcRenderer.invoke('signals:read', termId, windowDays),
+    readAll: (windowDays?: number) => ipcRenderer.invoke('signals:readAll', windowDays),
+    track: (term: string) => ipcRenderer.invoke('signals:track', term),
+    untrack: (id: string) => ipcRenderer.invoke('signals:untrack', id),
+    sample: (termId: string) => ipcRenderer.invoke('signals:sample', termId),
+    sweep: () => ipcRenderer.invoke('signals:sweep'),
+    trending: (geo?: string) => ipcRenderer.invoke('signals:trending', geo),
+    onChanged: on('signals:changed')
+  },
+  discord: {
+    watches: () => ipcRenderer.invoke('discord:watches'),
+    readAll: () => ipcRenderer.invoke('discord:readAll'),
+    read: (id: string) => ipcRenderer.invoke('discord:read', id),
+    track: (input: string, watchId?: string) => ipcRenderer.invoke('discord:track', input, watchId),
+    untrack: (id: string) => ipcRenderer.invoke('discord:untrack', id),
+    sweep: () => ipcRenderer.invoke('discord:sweep'),
+    fromStore: (watchId: string) => ipcRenderer.invoke('discord:fromStore', watchId),
+    alertsEnabled: () => ipcRenderer.invoke('discord:alertsEnabled'),
+    setAlertsEnabled: (on: boolean) => ipcRenderer.invoke('discord:setAlertsEnabled', on),
+    onChanged: on('discord:changed')
+  },
+  torrents: {
+    list: () => ipcRenderer.invoke('torrents:list'),
+    add: (input: unknown) => ipcRenderer.invoke('torrents:add', input),
+    pause: (id: string) => ipcRenderer.invoke('torrents:pause', id),
+    resume: (id: string) => ipcRenderer.invoke('torrents:resume', id),
+    remove: (id: string, deleteFiles: boolean) => ipcRenderer.invoke('torrents:remove', id, deleteFiles),
+    openFolder: (id: string) => ipcRenderer.invoke('torrents:openFolder', id),
+    getDir: () => ipcRenderer.invoke('torrents:getDir'),
+    chooseDir: () => ipcRenderer.invoke('torrents:chooseDir'),
+    onChanged: on('torrents:changed')
+  },
+  finance: {
+    state: () => ipcRenderer.invoke('finance:state'),
+    setWatchlist: (w: unknown) => ipcRenderer.invoke('finance:setWatchlist', w),
+    setPortfolio: (p: unknown) => ipcRenderer.invoke('finance:setPortfolio', p),
+    setSettings: (s: unknown) => ipcRenderer.invoke('finance:setSettings', s),
+    quotes: (symbols: string[]) => ipcRenderer.invoke('finance:quotes', symbols),
+    enrich: (symbols: string[]) => ipcRenderer.invoke('finance:enrich', symbols),
+    chart: (symbol: string, range: string, interval: string) => ipcRenderer.invoke('finance:chart', symbol, range, interval),
+    fundamentals: (symbol: string) => ipcRenderer.invoke('finance:fundamentals', symbol),
+    news: (symbol: string) => ipcRenderer.invoke('finance:news', symbol),
+    log: (entry: unknown) => ipcRenderer.invoke('finance:log', entry),
+    activity: (limit?: number) => ipcRenderer.invoke('finance:activity', limit),
+    appendHistory: (symbol: string, snap: unknown) => ipcRenderer.invoke('finance:appendHistory', symbol, snap),
+    history: (symbol: string) => ipcRenderer.invoke('finance:history', symbol),
+    analyze: (opts: unknown) => ipcRenderer.invoke('finance:analyze', opts)
+  }
+}
+
+contextBridge.exposeInMainWorld('atlis', api)
+
+export type AtlisApi = typeof api

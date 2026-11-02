@@ -1,0 +1,15 @@
+{
+  "tickers": [
+    { "symbol": "NVDA", "added": "2026-06-13", "is_favorite": true,  "notes": "AI infrastructure", "tags": ["tech","ai"] },
+    { "symbol": "AAPL", "added": "2026-06-13", "is_favorite": true,  "notes": "",                   "tags": ["tech"] },
+    { "symbol": "MSFT", "added": "2026-06-13", "is_favorite": true,  "notes": "Azure + Copilot",    "tags": ["tech","ai"] },
+    { "symbol": "TSLA", "added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["ev"] },
+    { "symbol": "META", "added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["tech"] },
+    { "symbol": "AMZN", "added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["tech","cloud"] },
+    { "symbol": "GOOGL","added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["tech"] },
+    { "symbol": "AMD",  "added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["tech","ai"] },
+    { "symbol": "JPM",  "added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["finance"] },
+    { "symbol": "BRK-B","added": "2026-06-13", "is_favorite": false, "notes": "",                   "tags": ["finance"] }
+  ],
+  "last_synced": null
+}

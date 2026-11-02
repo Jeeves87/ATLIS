@@ -1,0 +1,7 @@
+{
+  "account_size": 10000,
+  "risk_percent": 1.0,
+  "ticker_tape": false,
+  "default_range": "3M",
+  "breadth_basket": ["AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","BRK-B","JPM","UNH","V","XOM","LLY","JNJ","WMT","MA","PG","HD","CVX","MRK","NFLX","AMD","INTC","QCOM","ADBE","CSCO","ORCL","CRM","AVGO","TXN","GS","BAC","WFC","C","MS","BLK","AXP","CAT","BA","GE","DIS","NKE","KO","PEP","MCD","PFE","ABT","TMO","UPS","FDX"]
+}

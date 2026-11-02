@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 80" width="128" height="80" role="img" aria-labelledby="title desc">
+  <title id="title">Strandbeest loading animation</title>
+  <desc id="desc">A small side-profile strandbeest walking loader icon with animated linkage legs.</desc>
+
+  <style>
+    :root {
+      --beest: #2dd4bf;
+      --beest-soft: rgba(45, 212, 191, 0.35);
+      --ground: rgba(148, 163, 184, 0.75);
+    }
+
+    .frame,
+    .leg,
+    .rod,
+    .wheel,
+    .sail,
+    .ground {
+      vector-effect: non-scaling-stroke;
+    }
+
+    .frame,
+    .leg,
+    .rod,
+    .wheel {
+      fill: none;
+      stroke: var(--beest);
+      stroke-width: 2.25;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .rod {
+      stroke-width: 1.45;
+      opacity: 0.72;
+    }
+
+    .sail {
+      fill: var(--beest-soft);
+      stroke: var(--beest);
+      stroke-width: 1.8;
+      stroke-linejoin: round;
+    }
+
+    .ground {
+      fill: none;
+      stroke: var(--ground);
+      stroke-width: 1.2;
+      stroke-linecap: round;
+      stroke-dasharray: 5 8;
+      animation: drift 0.9s linear infinite;
+    }
+
+    .body {
+      animation: bob 0.6s ease-in-out infinite alternate;
+      transform-origin: 64px 36px;
+    }
+
+    .crank {
+      animation: spin 1.2s linear infinite;
+      transform-origin: 64px 35px;
+    }
+
+    @keyframes bob {
+      from { transform: translateY(-0.7px); }
+      to   { transform: translateY(1px); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes drift {
+      to { stroke-dashoffset: -13; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .body,
+      .crank,
+      .ground { animation: none; }
+    }
+  </style>
+
+  <!-- subtle moving beach/ground line -->
+  <path class="ground" d="M10 63.5 H118" />
+
+  <g class="body">
+    <!-- sail / spine silhouette -->
+    <path class="sail" d="M33 34 L64 9 L96 34 Z" />
+    <path class="frame" d="M27 35 H101" />
+    <path class="frame" d="M36 35 L64 14 L92 35" />
+    <path class="frame" d="M44 31 C55 27 73 27 84 31" />
+
+    <!-- animated central crank hint -->
+    <g class="crank">
+      <circle class="wheel" cx="64" cy="35" r="7.5" />
+      <path class="rod" d="M64 35 L71.5 35" />
+      <circle cx="71.5" cy="35" r="1.8" fill="#2dd4bf" />
+    </g>
+
+    <!-- rear linkage legs -->
+    <path class="leg" d="M34 35 L29 45 L22 58 M29 45 L35 38 M34 35 L35 38">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite"
+        values="M34 35 L29 45 L22 58 M29 45 L35 38 M34 35 L35 38; M34 35 L39 46 L36 59 M39 46 L38 34 M34 35 L38 34; M34 35 L40 43 L48 56 M40 43 L33 31 M34 35 L33 31; M34 35 L30 41 L32 55 M30 41 L29 34 M34 35 L29 34; M34 35 L29 45 L22 58 M29 45 L35 38 M34 35 L35 38" />
+    </path>
+
+    <path class="leg" d="M46 35 L52 43 L60 56 M52 43 L45 31 M46 35 L45 31">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite"
+        values="M46 35 L52 43 L60 56 M52 43 L45 31 M46 35 L45 31; M46 35 L42 41 L44 55 M42 41 L41 34 M46 35 L41 34; M46 35 L41 45 L34 58 M41 45 L47 38 M46 35 L47 38; M46 35 L51 46 L48 59 M51 46 L50 34 M46 35 L50 34; M46 35 L52 43 L60 56 M52 43 L45 31 M46 35 L45 31" />
+    </path>
+
+    <path class="leg" d="M58 35 L53 45 L46 58 M53 45 L59 38 M58 35 L59 38">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite"
+        values="M58 35 L53 45 L46 58 M53 45 L59 38 M58 35 L59 38; M58 35 L63 46 L60 59 M63 46 L62 34 M58 35 L62 34; M58 35 L64 43 L72 56 M64 43 L57 31 M58 35 L57 31; M58 35 L54 41 L56 55 M54 41 L53 34 M58 35 L53 34; M58 35 L53 45 L46 58 M53 45 L59 38 M58 35 L59 38" />
+    </path>
+
+    <!-- front linkage legs -->
+    <path class="leg" d="M70 35 L76 43 L84 56 M76 43 L69 31 M70 35 L69 31">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite"
+        values="M70 35 L76 43 L84 56 M76 43 L69 31 M70 35 L69 31; M70 35 L66 41 L68 55 M66 41 L65 34 M70 35 L65 34; M70 35 L65 45 L58 58 M65 45 L71 38 M70 35 L71 38; M70 35 L75 46 L72 59 M75 46 L74 34 M70 35 L74 34; M70 35 L76 43 L84 56 M76 43 L69 31 M70 35 L69 31" />
+    </path>
+
+    <path class="leg" d="M82 35 L77 45 L70 58 M77 45 L83 38 M82 35 L83 38">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite"
+        values="M82 35 L77 45 L70 58 M77 45 L83 38 M82 35 L83 38; M82 35 L87 46 L84 59 M87 46 L86 34 M82 35 L86 34; M82 35 L88 43 L96 56 M88 43 L81 31 M82 35 L81 31; M82 35 L78 41 L80 55 M78 41 L77 34 M82 35 L77 34; M82 35 L77 45 L70 58 M77 45 L83 38 M82 35 L83 38" />
+    </path>
+
+    <path class="leg" d="M94 35 L100 43 L108 56 M100 43 L93 31 M94 35 L93 31">
+      <animate attributeName="d" dur="1.2s" repeatCount="indefinite"
+        values="M94 35 L100 43 L108 56 M100 43 L93 31 M94 35 L93 31; M94 35 L90 41 L92 55 M90 41 L89 34 M94 35 L89 34; M94 35 L89 45 L82 58 M89 45 L95 38 M94 35 L95 38; M94 35 L99 46 L96 59 M99 46 L98 34 M94 35 L98 34; M94 35 L100 43 L108 56 M100 43 L93 31 M94 35 L93 31" />
+    </path>
+
+    <!-- tiny foot pads improve readability at icon size -->
+    <g opacity="0.9">
+      <ellipse cx="22" cy="58" rx="2.8" ry="1.1" fill="#2dd4bf">
+        <animate attributeName="cx" dur="1.2s" repeatCount="indefinite" values="22;36;48;32;22" />
+        <animate attributeName="cy" dur="1.2s" repeatCount="indefinite" values="58;59;56;55;58" />
+      </ellipse>
+      <ellipse cx="60" cy="56" rx="2.8" ry="1.1" fill="#2dd4bf">
+        <animate attributeName="cx" dur="1.2s" repeatCount="indefinite" values="60;44;34;48;60" />
+        <animate attributeName="cy" dur="1.2s" repeatCount="indefinite" values="56;55;58;59;56" />
+      </ellipse>
+      <ellipse cx="70" cy="58" rx="2.8" ry="1.1" fill="#2dd4bf">
+        <animate attributeName="cx" dur="1.2s" repeatCount="indefinite" values="70;84;96;80;70" />
+        <animate attributeName="cy" dur="1.2s" repeatCount="indefinite" values="58;59;56;55;58" />
+      </ellipse>
+      <ellipse cx="108" cy="56" rx="2.8" ry="1.1" fill="#2dd4bf">
+        <animate attributeName="cx" dur="1.2s" repeatCount="indefinite" values="108;92;82;96;108" />
+        <animate attributeName="cy" dur="1.2s" repeatCount="indefinite" values="56;55;58;59;56" />
+      </ellipse>
+    </g>
+  </g>
+</svg>

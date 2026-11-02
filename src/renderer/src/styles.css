@@ -1,0 +1,337 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink-950: #07090d;
+  --color-ink-900: #0b0d12;
+  --color-ink-850: #0e1118;
+  --color-ink-800: #11141c;
+  --color-ink-700: #161a24;
+  --color-ink-600: #1e2330;
+  --color-ink-500: #2a3040;
+  --color-mist-500: #525b70;
+  --color-mist-400: #8b93a7;
+  --color-mist-300: #aeb6c8;
+  --color-mist-100: #e8eaf0;
+  --color-volt-500: #7c5cff;
+  --color-volt-400: #9d85ff;
+  --color-pulse-400: #22d3ee;
+  --color-ember-400: #fb923c;
+  --color-ok-400: #34d399;
+  --color-danger-400: #f87171;
+  --font-sans: 'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-ink-900);
+  color: var(--color-mist-100);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+::selection { background: color-mix(in srgb, var(--color-volt-500) 40%, transparent); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--color-ink-500); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-mist-500); }
+::-webkit-scrollbar-track { background: transparent; }
+
+.titlebar-drag { -webkit-app-region: drag; }
+.titlebar-nodrag { -webkit-app-region: no-drag; }
+
+.life-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.62;
+  mix-blend-mode: screen;
+  filter: blur(0.2px);
+}
+
+/* Subtle blueprint grid for empty surfaces */
+.grid-texture {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--color-ink-600) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--color-ink-600) 45%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.glow-volt { box-shadow: 0 0 24px -6px color-mix(in srgb, var(--color-volt-500) 55%, transparent); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+/* Rendered markdown/html content inside chat + docs */
+.prose-atlis {
+  line-height: 1.65;
+  word-wrap: break-word;
+}
+.prose-atlis h1, .prose-atlis h2, .prose-atlis h3, .prose-atlis h4 {
+  color: var(--color-mist-100);
+  font-weight: 650;
+  margin: 1.1em 0 0.45em;
+  letter-spacing: -0.01em;
+}
+.prose-atlis h1 { font-size: 1.45em; border-bottom: 1px solid var(--color-ink-600); padding-bottom: 0.3em; }
+.prose-atlis h2 { font-size: 1.25em; }
+.prose-atlis h3 { font-size: 1.1em; }
+.prose-atlis p { margin: 0.55em 0; }
+.prose-atlis ul, .prose-atlis ol { margin: 0.55em 0; padding-left: 1.4em; }
+.prose-atlis ul { list-style: disc; }
+.prose-atlis ol { list-style: decimal; }
+.prose-atlis li { margin: 0.25em 0; }
+.prose-atlis a { color: var(--color-pulse-400); text-decoration: none; }
+.prose-atlis a:hover { text-decoration: underline; }
+.prose-atlis code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--color-ink-700);
+  border: 1px solid var(--color-ink-600);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose-atlis pre {
+  background: var(--color-ink-950);
+  border: 1px solid var(--color-ink-600);
+  border-radius: 6px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+  margin: 0.7em 0;
+}
+.prose-atlis pre code { background: transparent; border: none; padding: 0; }
+.prose-atlis blockquote {
+  border-left: 2px solid var(--color-volt-500);
+  margin: 0.7em 0;
+  padding: 0.1em 0 0.1em 0.9em;
+  color: var(--color-mist-300);
+}
+.prose-atlis table { border-collapse: collapse; margin: 0.8em 0; width: 100%; font-size: 0.92em; }
+.prose-atlis th, .prose-atlis td { border: 1px solid var(--color-ink-600); padding: 0.4em 0.7em; text-align: left; }
+.prose-atlis th { background: var(--color-ink-700); font-weight: 600; }
+.prose-atlis hr { border: none; border-top: 1px solid var(--color-ink-600); margin: 1.2em 0; }
+.prose-atlis img { max-width: 100%; border-radius: 6px; }
+
+/* ---- Finance terminal (Fincept amber aesthetic, CSS port) ---- */
+.fin {
+  --fin-bg-base: #0a0d14;
+  --fin-bg-surface: #111520;
+  --fin-bg-raised: #1a1f2e;
+  --fin-panel: #0f1117;
+  --fin-amber: #f59e0b;
+  --fin-amber-dim: #92400e;
+  --fin-positive: #22c55e;
+  --fin-negative: #ef4444;
+  --fin-text-1: #e2e8f0;
+  --fin-text-2: #94a3b8;
+  --fin-text-3: #475569;
+  --fin-border: #1e2d45;
+  --fin-cyan: #22d3ee;
+  --fin-info: #38bdf8;
+  background: var(--fin-bg-base);
+  color: var(--fin-text-1);
+  font-size: 12px;
+}
+.fin-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.fin-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fin-amber);
+}
+.fin-sublabel {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fin-text-2);
+}
+.fin-panel-box {
+  background: var(--fin-bg-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: 4px;
+}
+.fin-raised { background: var(--fin-bg-raised); }
+.fin-pos { color: var(--fin-positive); }
+.fin-neg { color: var(--fin-negative); }
+.fin-amber { color: var(--fin-amber); }
+.fin-divider { border-top: 1px solid var(--fin-border); }
+.fin-card {
+  background: var(--fin-bg-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: 5px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.fin-card:hover { border-color: color-mix(in srgb, var(--fin-amber) 55%, transparent); background: var(--fin-bg-raised); }
+.fin-card.undervalued { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fin-positive) 45%, transparent); }
+.fin-chip {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--fin-bg-raised);
+  border: 1px solid var(--fin-border);
+  color: var(--fin-text-2);
+}
+.fin-tab {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  color: var(--fin-text-2);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.fin-tab:hover { color: var(--fin-text-1); }
+.fin-tab.active { color: var(--fin-amber); border-bottom-color: var(--fin-amber); }
+.fin-btn {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--fin-border);
+  color: var(--fin-text-1);
+  background: var(--fin-bg-raised);
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.fin-btn:hover { border-color: var(--fin-amber); }
+.fin-btn-amber { background: color-mix(in srgb, var(--fin-amber) 18%, transparent); border-color: color-mix(in srgb, var(--fin-amber) 55%, transparent); color: var(--fin-amber); }
+.fin-input {
+  background: var(--fin-bg-base);
+  border: 1px solid var(--fin-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--fin-text-1);
+}
+.fin-input:focus { outline: none; border-color: var(--fin-amber); }
+.fin-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+@keyframes fin-marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.fin-marquee-track { display: inline-flex; white-space: nowrap; animation: fin-marquee 60s linear infinite; }
+.fin-drawer {
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* TipTap editor */
+.tiptap {
+  outline: none;
+  min-height: 52px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  line-height: 1.6;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-mist-500);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.tiptap code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--color-ink-700);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.tiptap pre {
+  background: var(--color-ink-950);
+  border: 1px solid var(--color-ink-600);
+  border-radius: 6px;
+  padding: 0.6em 0.8em;
+  margin: 0.4em 0;
+}
+.tiptap ul { list-style: disc; padding-left: 1.3em; }
+.tiptap ol { list-style: decimal; padding-left: 1.3em; }
+.tiptap blockquote { border-left: 2px solid var(--color-volt-500); padding-left: 0.8em; color: var(--color-mist-300); }
+
+/* ---- Hub: "linux-antiquity" aesthetic (art-nouveau star chart, helios palette) ---- */
+.antiq {
+  --antiq-base: #181818;
+  --antiq-shadow: #121212;
+  --antiq-highlight: #333333;
+  --antiq-accent: #fccf8a;
+  --antiq-accent-dark: #87704f;
+  --antiq-text-light: #d0daed;
+  --antiq-pattern: #87704f;
+  --antiq-moon: #484a5e;
+  --antiq-serif: 'Palatino Linotype', 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  background:
+    radial-gradient(ellipse 120% 90% at 50% 115%, #232323 0%, transparent 55%),
+    var(--antiq-base);
+  color: var(--antiq-text-light);
+  font-family: var(--antiq-serif);
+}
+.antiq-caption {
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--antiq-text-light) 75%, transparent);
+}
+.antiq-smallcaps {
+  font-variant: small-caps;
+  letter-spacing: 0.14em;
+}
+.antiq-card {
+  position: relative;
+  width: 148px;
+  padding: 14px 12px 16px;
+  border: 1px solid var(--antiq-highlight);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #1d1d1d 0%, #141414 100%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--antiq-pattern) 22%, transparent),
+    0 4px 14px -6px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.antiq-card::after {
+  /* inner frame, like the tarot cards */
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid color-mix(in srgb, var(--antiq-pattern) 30%, transparent);
+  border-radius: 7px;
+  pointer-events: none;
+}
+.antiq-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--antiq-accent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--antiq-accent) 30%, transparent),
+    0 8px 22px -8px color-mix(in srgb, var(--antiq-accent) 35%, black);
+}
+.antiq-diamond {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  transform: rotate(45deg);
+  border: 1px solid var(--antiq-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 3px 3px 0 0 rgba(0, 0, 0, 0.35);
+}
+.antiq-diamond > * {
+  transform: rotate(-45deg);
+}
+@keyframes antiq-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.antiq-rays {
+  animation: antiq-spin 240s linear infinite;
+  /* the sun sits at the viewBox center; rotate about it, not the corner */
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+@keyframes antiq-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.antiq-twinkle { animation: antiq-twinkle 4s ease-in-out infinite; }

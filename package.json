@@ -1,0 +1,84 @@
+{
+  "name": "atlis",
+  "productName": "ATLIS",
+  "version": "0.1.0",
+  "description": "ATLIS — Agentic Task & LLM Interaction Studio. Standalone multi-provider agentic harness.",
+  "main": "./out/main/index.js",
+  "author": "Kalev",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev -w",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "dist": "electron-vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "dev.kalev.atlis",
+    "productName": "ATLIS",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/@github/copilot/**",
+      "**/node_modules/@github/copilot-win32-x64/**",
+      "resources/desktop-control.ps1"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/icon.ico",
+        "to": "resources/icon.ico"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.0",
+    "@github/copilot-sdk": "^1.0.5",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tiptap/extension-placeholder": "^3.26.0",
+    "@tiptap/react": "^3.26.0",
+    "@tiptap/starter-kit": "^3.26.0",
+    "@types/leaflet": "^1.9.22",
+    "dompurify": "^3.4.11",
+    "electron-updater": "^6.8.9",
+    "framer-motion": "^12.40.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.17.0",
+    "marked": "^18.0.5",
+    "openai": "^6.42.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "recharts": "^3.8.1",
+    "turndown": "^7.2.4",
+    "webtorrent": "^3.0.16",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^25.9.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/turndown": "^5.0.6",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.2",
+    "electron-vite": "^5.0.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.5"
+  },
+  "overrides": {
+    "form-data": "4.0.6",
+    "undici": "7.28.0",
+    "esbuild": "0.28.1"
+  }
+}
