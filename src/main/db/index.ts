@@ -303,6 +303,12 @@ export function initDb(): void {
       created_at INTEGER NOT NULL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_mtg_prices_day ON mtg_prices(ext_id, variant, source, observed_on);
+    -- The read path: "newest / previous / N-days-ago price for this card".
+    -- idx_mtg_prices_day has source between the card and the day, so it finds
+    -- a card's rows but not in date order, and every such lookup sorted the
+    -- card's whole history. With ~1k owned cards that made the Owned list a
+    -- ~1s query run on the main thread; this index brings it to ~20ms.
+    CREATE INDEX IF NOT EXISTS idx_mtg_prices_card_day ON mtg_prices(ext_id, variant, observed_on);
 
     -- Scryfall card facts for cards ATLIS already references (owned rows,
     -- watchlist). vault_items only stores a name and a scryfall id, which is

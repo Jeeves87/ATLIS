@@ -647,6 +647,40 @@ function countdown(ymd: string | null): string {
  * alerts, and Scryfall search to fill both. Prices come from the main-process
  * scheduler; this view only reads and edits.
  */
+const OWNED_BATCH = 120
+
+/**
+ * Tail of a batched list: asks for the next batch as it nears the viewport,
+ * with a button as the fallback for when it is already on screen.
+ */
+function LoadMore({ shown, total, onMore }: { shown: number; total: number; onMore: () => void }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const more = useRef(onMore)
+  more.current = onMore
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // Measured against the list's own scroll box: the viewport would ignore
+    // the margin, since the scroll box clips the sentinel first.
+    let root: HTMLElement | null = el.parentElement
+    while (root && !/(auto|scroll)/.test(getComputedStyle(root).overflowY)) root = root.parentElement
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && more.current(), { root, rootMargin: '600px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [shown])
+  return (
+    <div ref={ref} className="mt-3 flex items-center justify-center gap-2 text-xs text-white/40">
+      Showing {shown} of {total}
+      <button onClick={onMore} className="rounded border border-white/10 px-2 py-0.5 text-white/60 hover:bg-white/5">
+        Show more
+      </button>
+    </div>
+  )
+}
+
+// Survives the page unmounting, which happens every time another app is opened.
+let setsSyncAttempted = false
+
 export default function MtgView() {
   const [sets, setSets] = useState<MtgSet[]>([])
   const [watch, setWatch] = useState<MtgWatchRow[]>([])
@@ -782,6 +816,7 @@ export default function MtgView() {
   }
   const [history, setHistory] = useState<MtgPrice[]>([])
 
+  const [loaded, setLoaded] = useState(false)
   const load = useCallback(async () => {
     const [u, w, o] = await Promise.all([
       window.atlis.mtg.upcoming(540),
@@ -791,6 +826,7 @@ export default function MtgView() {
     setSets(u)
     setWatch(w)
     setOwned(o)
+    setLoaded(true)
   }, [])
 
   useEffect(() => {
@@ -801,10 +837,16 @@ export default function MtgView() {
 
   useEffect(() => { void window.atlis.mtg.sealedFollowed().then(setFollowed).catch(() => {}) }, [])
   // First run has an empty set cache — pull it so the calendar isn't blank.
+  // Only once the stored list has actually loaded (it starts out empty on
+  // every mount, which used to trigger a full Scryfall re-sync each time the
+  // page opened), and at most once per app run in case the calendar is simply
+  // empty for the window being shown.
   useEffect(() => {
-    if (sets.length === 0 && !syncing) void syncSets()
+    if (!loaded || sets.length > 0 || syncing || setsSyncAttempted) return
+    setsSyncAttempted = true
+    void syncSets()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sets.length])
+  }, [loaded, sets.length])
 
   useEffect(() => {
     if (!selected?.extId) { setHistory([]); return }
@@ -1286,6 +1328,14 @@ export default function MtgView() {
   }, [filteredOwned, ownedSort, ownedPeriod])
 
   const ownedMovers = useMemo(() => summariseMovers(filteredOwned, ownedPeriod), [filteredOwned, ownedPeriod])
+
+  // A thousand-card collection is ~20k elements as one grid, which froze the
+  // page for a second every time the tab opened. Render it a batch at a time
+  // and add the next batch as the end scrolls into view. A new filter or sort
+  // starts again from the top.
+  const [ownedLimit, setOwnedLimit] = useState(OWNED_BATCH)
+  useEffect(() => setOwnedLimit(OWNED_BATCH), [ownedQuery, ownedColors, colorMode, ownedSort, ownedCedh, ownedDeck, ownedPeriod])
+  const visibleOwned = useMemo(() => sortedOwned.slice(0, ownedLimit), [sortedOwned, ownedLimit])
 
   const watchCounts = useMemo(
     () => ({
@@ -2640,7 +2690,7 @@ export default function MtgView() {
             ) : ownedLayout === 'grid' ? (
               /* Gallery — the collection as pictures, reflowing to the width. */
               <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
-                {sortedOwned.map((o) => {
+                {visibleOwned.map((o) => {
                   const key = `o:${o.id}`
                   const active = selected?.key === key
                   const total = o.last_price == null ? null : o.last_price * o.quantity
@@ -2719,7 +2769,7 @@ export default function MtgView() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {sortedOwned.map((o) => {
+                {visibleOwned.map((o) => {
                   const key = `o:${o.id}`
                   const active = selected?.key === key
                   return (
@@ -2775,6 +2825,13 @@ export default function MtgView() {
                   )
                 })}
               </div>
+            )}
+            {visibleOwned.length < sortedOwned.length && (
+              <LoadMore
+                shown={visibleOwned.length}
+                total={sortedOwned.length}
+                onMore={() => setOwnedLimit((n) => n + OWNED_BATCH)}
+              />
             )}
           </section>
           )}
