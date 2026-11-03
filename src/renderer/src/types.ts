@@ -2200,7 +2200,7 @@ declare global {
         deckFromRipped(product: string): Promise<{ deck: MtgDeckRow; note: string | null }>
         gameReadiness(): Promise<{ ok: boolean; problems: string[] }>
         gameDecks(): Promise<GameDeckOption[]>
-        gameStart(opts: { deckId: string; opponents: string[] }): Promise<void>
+        gameStart(opts: { deck: string; opponents: string[] }): Promise<void>
         gameSend(cmd: { cmd: string; [k: string]: unknown }): Promise<void>
         gameStop(): Promise<void>
         onGameEvent(cb: (e: GameEvent) => void): () => void

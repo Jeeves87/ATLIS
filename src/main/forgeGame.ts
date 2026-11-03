@@ -34,8 +34,8 @@ export interface DeckOption {
 }
 
 export interface StartOptions {
-  /** Your deck: an ATLIS saved-deck id. */
-  deckId: string
+  /** Your deck file path (from listDecks): a saved ATLIS deck or a Forge precon. */
+  deck: string
   /** Opponent deck file paths (from listDecks), 1–3 of them. */
   opponents: string[]
 }
@@ -142,7 +142,7 @@ export async function start(appRoot: string, opts: StartOptions, onEvent: (e: Ga
   const r = readiness(appRoot)
   if (!r.ok) throw new Error(r.problems.join(' '))
   const all = await listDecks()
-  const you = all.find((d) => d.kind === 'atlis' && d.deckId === opts.deckId)
+  const you = all.find((d) => d.path === opts.deck)
   if (!you) throw new Error('That deck needs a commander before it can be played (Decks tab → crown a card).')
   const opps = opts.opponents.map((p) => all.find((d) => d.path === p)).filter((d): d is DeckOption => !!d)
   if (!opps.length) throw new Error('Pick at least one opponent.')

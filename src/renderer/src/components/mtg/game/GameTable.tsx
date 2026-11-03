@@ -73,21 +73,22 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
     void window.atlis.mtg.gameDecks().then((d) => {
       setDecks(d)
       const own = d.filter((x) => x.kind === 'atlis')
-      if (own[0]?.deckId) setMine(own[0].deckId)
-      const firstOpp = own[1] ?? d.find((x) => x.kind === 'precon')
+      const first = own[0] ?? d.find((x) => x.kind === 'precon')
+      if (first) setMine(first.path)
+      const firstOpp = own[1] ?? d.find((x) => x.kind === 'precon' && x.path !== first?.path)
       if (firstOpp) setOpps([firstOpp.path])
     }).catch((e) => onStatus(e instanceof Error ? e.message : String(e)))
   }, [onStatus])
 
   const own = (decks ?? []).filter((d) => d.kind === 'atlis')
-  const precons = (decks ?? []).filter((d) => d.kind === 'precon')
-    .filter((d) => !filter || `${d.name} ${d.set ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
+  const allPrecons = (decks ?? []).filter((d) => d.kind === 'precon')
     .sort((a, b) => (b.year ?? '').localeCompare(a.year ?? '') || a.name.localeCompare(b.name))
+  const precons = allPrecons.filter((d) => !filter || `${d.name} ${d.set ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
 
   const start = async (): Promise<void> => {
     setStarting(true)
     try {
-      await window.atlis.mtg.gameStart({ deckId: mine, opponents: opps.filter(Boolean) })
+      await window.atlis.mtg.gameStart({ deck: mine, opponents: opps.filter(Boolean) })
       onStarted()
     } catch (e) {
       onStatus(e instanceof Error ? e.message : String(e))
@@ -105,7 +106,7 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
       </div>
     )
   }
-  if (!own.length) return <p className="text-sm text-white/40">Save a deck with a commander on the Decks tab first.</p>
+  if (!own.length && !allPrecons.length) return <p className="text-sm text-white/40">Save a deck with a commander on the Decks tab first.</p>
 
   const select = 'w-full rounded-md border border-white/10 bg-[#16161d] px-2 py-1.5 text-sm focus:border-violet-400/50 focus:outline-none'
   return (
@@ -113,7 +114,16 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
       <div>
         <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-white/40">Your deck</div>
         <select value={mine} onChange={(e) => setMine(e.target.value)} className={select}>
-          {own.map((d) => <option key={d.deckId} value={d.deckId}>{d.name}</option>)}
+          {own.length > 0 && (
+            <optgroup label="Your decks">
+              {own.map((d) => <option key={d.path} value={d.path}>{d.name}</option>)}
+            </optgroup>
+          )}
+          {allPrecons.length > 0 && (
+            <optgroup label="Commander precons">
+              {allPrecons.map((d) => <option key={d.path} value={d.path}>{d.name} ({d.set} {d.year})</option>)}
+            </optgroup>
+          )}
         </select>
       </div>
       <div>
@@ -128,7 +138,7 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
               <select value={o} onChange={(e) => setOpps((p) => p.map((x, j) => (j === i ? e.target.value : x)))} className={select}>
                 <option value="">— choose —</option>
                 <optgroup label="Your decks">
-                  {own.filter((d) => d.deckId !== mine).map((d) => <option key={d.path} value={d.path}>{d.name}</option>)}
+                  {own.filter((d) => d.path !== mine).map((d) => <option key={d.path} value={d.path}>{d.name}</option>)}
                 </optgroup>
                 <optgroup label="Forge Commander precons">
                   {precons.map((d) => <option key={d.path} value={d.path}>{d.name} ({d.set} {d.year})</option>)}

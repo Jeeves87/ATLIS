@@ -511,7 +511,7 @@ export function registerIpc(win: BrowserWindow): { discordBot: DiscordBot; brows
   ipcMain.handle('game:readiness', () => forgeGame.readiness(app.getAppPath()))
   ipcMain.handle('game:decks', () => forgeGame.listDecks())
   ipcMain.handle('game:start', (_e, opts: forgeGame.StartOptions) =>
-    forgeGame.start(app.getAppPath(), { deckId: String(opts?.deckId ?? ''), opponents: Array.isArray(opts?.opponents) ? opts.opponents.map(String).slice(0, 3) : [] }, gameEvent))
+    forgeGame.start(app.getAppPath(), { deck: String(opts?.deck ?? ''), opponents: Array.isArray(opts?.opponents) ? opts.opponents.map(String).slice(0, 3) : [] }, gameEvent))
   ipcMain.handle('game:send', (_e, cmd: Record<string, unknown>) => { if (cmd && typeof cmd.cmd === 'string') forgeGame.send(cmd) })
   ipcMain.handle('game:stop', () => forgeGame.stop())
   ipcMain.handle('sounds:library', () => gameSounds.library())
