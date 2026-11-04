@@ -1171,6 +1171,8 @@ export interface GameCard {
   highlighted?: boolean
   canAttack?: boolean
   canBlock?: boolean
+  /** During blocks: the attackers (coming at you) this creature may legally block. */
+  blocks?: number[]
   /** Must attack this combat (goad, "attacks each combat if able"); Forge rejects declarations without it. */
   mustAttack?: boolean
   /** Players who goaded it: it must attack someone else if it can. */
@@ -2214,7 +2216,7 @@ declare global {
         tableRemoveMat(name: string): Promise<void>
         forgeStatus(): Promise<ForgeStatus>
         forgeChooseDir(): Promise<{ ok: boolean; message: string | null }>
-        forgeExport(): Promise<{ decksDir: string; written: string[]; skipped: Array<{ name: string; reason: string }>; unmatchedSets: number }>
+        forgeExport(): Promise<{ decksDir: string; written: string[]; skipped: Array<{ name: string; reason: string }>; unmatchedSets: number; offline?: string }>
         forgeLaunch(): Promise<{ ok: boolean; message: string }>
         forgeOpenUrl(url: string): Promise<void>
         deckRecs(id: string): Promise<MtgDeckRecs | null>

@@ -273,6 +273,21 @@ final class Snapshot {
         return false;
     }
 
+    /** Ids of the attackers coming at you (or your planeswalkers) that this creature may legally block. */
+    private JsonArray blockableAttackers(Card blocker) {
+        JsonArray out = new JsonArray();
+        forge.game.combat.Combat cb = game.getCombat();
+        if (cb == null) return out;
+        int seat = gui.seat().getId();
+        for (Card att : cb.getAttackers()) {
+            forge.game.GameEntity d = cb.getDefenderByAttacker(att);
+            boolean atYou = d instanceof forge.game.player.Player p ? p.getId() == seat
+                : d instanceof Card dc && dc.getController() != null && dc.getController().getId() == seat;
+            if (atYou && forge.game.combat.CombatUtil.canBlock(att, blocker, cb)) out.add(att.getId());
+        }
+        return out;
+    }
+
     private void combatOptions(CardView c, JsonObject o) {
         if ((!attackStep && !blockStep) || game == null || gui.seat() == null) return;
         if (c.getZone() != ZoneType.Battlefield || c.getController() == null || c.getController().getId() != gui.seat().getId()) return;
@@ -292,7 +307,12 @@ final class Snapshot {
                     o.addProperty("goadedBy", by.toString());
                 }
             }
-            if (blockStep) o.addProperty("canBlock", canBlockAnAttacker(real));
+            if (blockStep) {
+                o.addProperty("canBlock", canBlockAnAttacker(real));
+                // Exactly which attackers it may block, so ATLIS can explain an
+                // illegal pairing (a flier, shadow…) instead of just being refused.
+                o.add("blocks", blockableAttackers(real));
+            }
         } catch (RuntimeException ignored) {
             // advisory only; Forge still validates the click
         }

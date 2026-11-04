@@ -158,7 +158,7 @@ function ForgePanel({ onStatus }: { onStatus: (s: string | null) => void }): Rea
             <button className={primary} disabled={busy != null} onClick={() => void run('export', async () => {
               const r = await window.atlis.mtg.forgeExport()
               onStatus(
-                `Sent ${r.written.length} deck(s) to Forge.` +
+                (r.offline ? `${r.offline}, so Forge keeps the ${r.written.length} deck(s) it already had; try again once you're back online.` : `Sent ${r.written.length} deck(s) to Forge.`) +
                 (r.skipped.length ? ` Skipped: ${r.skipped.map((s) => `${s.name} (${s.reason})`).join(', ')}.` : '') +
                 (r.unmatchedSets ? ` ${r.unmatchedSets} card(s) went without a set code, so Forge picks their art.` : '')
               )

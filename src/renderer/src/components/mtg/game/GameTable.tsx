@@ -381,6 +381,11 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
     const fight = state.combat.find((f) => f.attacker === c.id)
     if (fight) {
       // An attacker: give it the waiting creature, or make it the one your next clicks block.
+      const waiting = armed != null ? state.cards[String(armed)] : undefined
+      if (waiting?.blocks && !waiting.blocks.includes(c.id)) {
+        toast(whyCantBlock(waiting, c), 'rule'); setArmed(null)
+        return
+      }
       send('card', { id: c.id })
       if (armed != null) { send('card', { id: armed }); setArmed(null); setBlockTarget(null) } else setBlockTarget(c.id)
       return
@@ -393,7 +398,9 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
       send('card', { id: c.id })
       return
     }
+    if (c.canBlock === false) { toast(whyCantBlockAny(state, c), 'rule'); return }
     if (!c.canBlock) { send('card', { id: c.id }); return }
+    if (blockTarget != null && c.blocks && !c.blocks.includes(blockTarget)) { toast(whyCantBlock(c, state.cards[String(blockTarget)]), 'rule'); return }
     if (blockTarget != null) { send('card', { id: blockTarget }); send('card', { id: c.id }) } else setArmed((a) => (a === c.id ? null : c.id))
   }, [send, blocking, state, armed, blockTarget, toast])
   const onPlayer = useCallback((p: GamePlayer) => send('player', { id: p.id }), [send])
@@ -492,7 +499,8 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
                     <PlayerHud player={you} card={card} onMana={(b) => send('mana', { color: b })} onZone={(z) => setZone({ player: you.id, zone: z })} />
                   </div>
                   <div className="flex items-center gap-3">
-                    <Portrait player={you} state={state} card={card} onPlayer={onPlayer} size={84} />
+                    <Portrait player={you} state={state} card={card} onPlayer={onPlayer} size={84}
+                      payLife={paymentGuide(state)?.lifeOption ?? null} />
                     <ActionDock state={state} shake={shake} tip={tip} next={next} onOk={() => send('ok')} onCancel={() => send('cancel')}
                       armed={armed} blockTarget={blockTarget} />
                   </div>
@@ -930,6 +938,7 @@ function ActionDock({ state, shake, tip, next, onOk, onCancel, armed, blockTarge
   const may = optionalTrigger(state)
   const blocking = blockGuide(state, { armed, target: blockTarget })
   const forced = blocking || may ? null : attackGuide(state)
+  const paying = blocking || forced || may ? null : paymentGuide(state)
   // 80% of table scale: present, not dominant.
   const zoom = useTableScale() * 0.8
   return (
@@ -943,13 +952,15 @@ function ActionDock({ state, shake, tip, next, onOk, onCancel, armed, blockTarge
       >
         <div className="min-w-0 flex-1">
           {(may?.name ?? source) && <div className="truncate text-[10px] uppercase tracking-wider text-violet-200/60">{may?.name ?? source}</div>}
-          <div className={`${blocking ? 'line-clamp-2 text-sky-100' : forced ? 'line-clamp-2 text-orange-100' : 'truncate'} text-[13px] font-medium leading-snug`} title={blocking?.headline ?? forced?.headline ?? headline}>
-            {may ? 'Optional trigger — do you want to use it?' : blocking ? blocking.headline : forced ? forced.headline : next ? (next.resolves ? 'Something is waiting to resolve' : 'Your priority — play something, or move on') : headline || 'Waiting for opponents…'}
+          <div className={`${blocking ? 'line-clamp-2 text-sky-100' : forced ? 'line-clamp-2 text-orange-100' : paying ? 'line-clamp-2 text-emerald-100' : 'truncate'} text-[13px] font-medium leading-snug`} title={blocking?.headline ?? forced?.headline ?? paying?.headline ?? headline}>
+            {may ? 'Optional trigger — do you want to use it?' : blocking ? blocking.headline : forced ? forced.headline : paying ? paying.headline : next ? (next.resolves ? 'Something is waiting to resolve' : 'Your priority — play something, or move on') : headline || 'Waiting for opponents…'}
           </div>
           {blocking ? (
             <div className={`truncate text-[11px] font-medium ${/LETHAL/.test(blocking.detail) ? 'text-red-300' : 'text-sky-200'}`} title={blocking.detail}>{blocking.detail}</div>
           ) : forced ? (
             <div className="truncate text-[11px] font-medium text-orange-200" title={forced.detail}>{forced.detail}</div>
+          ) : paying ? (
+            <div className="line-clamp-2 text-[11px] font-medium leading-snug text-emerald-200/90" title={paying.detail}>{paying.detail}</div>
           ) : may ? (
             // What "Yes" actually does, in the card's own words.
             <div className="line-clamp-2 text-[11px] font-medium leading-snug text-amber-100/90" title={may.text}>
@@ -978,7 +989,7 @@ function ActionDock({ state, shake, tip, next, onOk, onCancel, armed, blockTarge
         </button>
         <button onClick={onOk} disabled={!p.okEnabled}
           className="min-w-[150px] rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-600 px-4 py-2 text-sm font-semibold text-black shadow-lg shadow-emerald-900/40 hover:from-emerald-300 hover:to-emerald-500 disabled:from-white/10 disabled:to-white/5 disabled:text-white/30 disabled:shadow-none">
-          {may ? 'Yes, use it' : blocking?.ok ?? next?.button ?? (p.okLabel || 'OK')}
+          {may ? 'Yes, use it' : blocking?.ok ?? (paying && p.okLabel === 'Auto' ? 'Auto-pay' : null) ?? next?.button ?? (p.okLabel || 'OK')}
           <span className="ml-2 text-[10px] font-normal opacity-60">Space · M5</span>
         </button>
       </div>
@@ -1217,6 +1228,75 @@ export interface NextMove {
  * step where someone stops. This spells out which, using your stops (main 1,
  * attackers, main 2 on your turn; end of turn on theirs) and the board.
  */
+const short = (c: GameCard | undefined): string => (c?.name ?? 'That creature').split(',')[0]
+const has = (c: GameCard | undefined, kw: RegExp): boolean => kw.test(c?.text ?? '')
+
+/**
+ * Why `blocker` may not block `attacker`, in plain words — the rule, not just
+ * "no". Read from the cards' rules text, so it covers the common evasion
+ * keywords; anything else falls back to pointing at the two cards' text.
+ */
+export function whyCantBlock(blocker: GameCard | undefined, attacker: GameCard | undefined): string {
+  const b = short(blocker), a = short(attacker)
+  if (blocker?.tapped) return `${b} is tapped — tapped creatures can't block.`
+  if (has(blocker, /\bcan(?:'|’)?t block\b|\bcannot block\b/i)) return `${b} can't block at all (its own text says so).`
+  if (has(attacker, /\bcan(?:'|’)?t be blocked\b(?! (?:by|except))/i)) return `${a} can't be blocked by anything.`
+  if (has(attacker, /\bFlying\b/) && !has(blocker, /\b(Flying|Reach)\b/))
+    return `${a} has flying — only creatures with flying or reach can block it, and ${b} has neither.`
+  if (has(attacker, /\bShadow\b/) && !has(blocker, /\bShadow\b/)) return `${a} has shadow — only creatures with shadow can block it.`
+  if (has(attacker, /\bHorsemanship\b/) && !has(blocker, /\bHorsemanship\b/)) return `${a} has horsemanship — only creatures with horsemanship can block it.`
+  if (has(attacker, /\bFear\b/)) return `${a} has fear — only black or artifact creatures can block it.`
+  if (has(attacker, /\bIntimidate\b/)) return `${a} has intimidate — only artifact creatures or creatures that share a color with it can block it.`
+  if (has(attacker, /\bSkulk\b/)) return `${a} has skulk — it can't be blocked by creatures with greater power than it.`
+  const walk = /\b(Plains|Island|Swamp|Mountain|Forest|Desert|legendary land|nonbasic land)walk\b/i.exec(attacker?.text ?? '')
+  if (walk) return `${a} has ${walk[1].toLowerCase()}walk — it can't be blocked while you control a ${walk[1].toLowerCase()}.`
+  if (has(attacker, /\bcan(?:'|’)?t be blocked (?:by|except)\b/i)) return `${a} has a blocking restriction — hover it to read which creatures can block it.`
+  return `${b} can't block ${a} — something on one of them (or an effect in play) forbids it. Hover both to read their text.`
+}
+
+/** Why this creature can't block any of the attackers coming at you. */
+export function whyCantBlockAny(s: GameState, blocker: GameCard): string {
+  const at = s.combat.filter((c) => c.defender === s.you || s.cards[String(c.defender)]?.controller === s.you)
+    .map((c) => s.cards[String(c.attacker)])
+  if (blocker.tapped || has(blocker, /\bcan(?:'|’)?t block\b/i) || at.length === 0) return whyCantBlock(blocker, at[0])
+  if (at.every((a) => has(a, /\bFlying\b/)) && !has(blocker, /\b(Flying|Reach)\b/))
+    return `Every attacker coming at you has flying — only creatures with flying or reach can block them, and ${short(blocker)} has neither.`
+  const reasons = [...new Set(at.map((a) => whyCantBlock(blocker, a)))]
+  return reasons.length === 1 ? reasons[0] : `${short(blocker)} can't block any of these attackers: ${reasons.join(' ')}`
+}
+
+const COLOR_NAME: Record<string, string> = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green', C: 'colorless' }
+
+/**
+ * Forge's mana payment prompt, readable. Its first line is the whole ability
+ * text ("Birthing Pod - {1}{G/P}, {T}, Sacrifice a creature: …"), which used
+ * to be all the dock showed; the cost, and Forge's note that Phyrexian mana
+ * can be paid with life by clicking yourself, were cut off underneath.
+ * `lifeOption` is the life a click on your portrait would pay, when it can.
+ */
+export function paymentGuide(s: GameState): { headline: string; detail: string; lifeOption: number | null } | null {
+  const msg = s.prompt.message || ''
+  const cost = /Pay Mana Cost:\s*((?:\{[^}]+\})+)/.exec(msg)?.[1]
+  if (!cost) return null
+  const name = (s.prompt.card != null ? s.cards[String(s.prompt.card)]?.name : null) ?? 'this'
+  const phyrexian = [...cost.matchAll(/\{([WUBRG])\/P\}/g)].map((m) => m[1])
+  const lifePaid = Number(/\((\d+) life paid for phyrexian mana\)/i.exec(msg)?.[1] ?? 0)
+  const canClickLife = /Click on your life total to pay life/i.test(msg)
+  const parts: string[] = []
+  if (lifePaid) parts.push(`Paid ${lifePaid} life for Phyrexian mana.`)
+  if (phyrexian.length) {
+    const sym = [...new Set(phyrexian)].map((c) => `{${c}/P}`).join(' ')
+    const colors = [...new Set(phyrexian)].map((c) => COLOR_NAME[c]).join(' or ')
+    parts.push(`${sym} is Phyrexian mana: pay it with ${colors} mana${canClickLife ? ', or click your portrait to pay 2 life instead' : ''}${phyrexian.length > 1 ? ' (2 life each)' : ''}.`)
+  }
+  parts.push(`Tap lands to pay ${parts.length ? 'the rest' : 'it'}, or Auto-pay lets Forge pick the lands.`)
+  return {
+    headline: `${lifePaid ? 'Still to pay' : 'Pay'} ${cost} for ${name.split(',')[0]}`,
+    detail: parts.join(' '),
+    lifeOption: phyrexian.length && canClickLife ? 2 : null
+  }
+}
+
 /** Someone is attacking you and the game hasn't reached the declare-blockers step yet. */
 export function attackedBeforeBlocks(s: GameState): boolean {
   return s.phase === 'COMBAT_DECLARE_ATTACKERS' && s.activePlayer !== s.you && s.combat.some((c) => c.defenderIsPlayer && c.defender === s.you)

@@ -217,8 +217,10 @@ export function Battlefield({ player, card, onCard, onHover, prefer, mirrored = 
  * A player: their commander's art in a medallion, life total on it, a ring
  * that drains as life drops. Click it when a spell asks you to pick a player.
  */
-export function Portrait({ player, state, card, onPlayer, size = 92 }: {
+export function Portrait({ player, state, card, onPlayer, size = 92, payLife = null }: {
   player: GamePlayer; state: GameState; card: CardLookup; onPlayer: (p: GamePlayer) => void; size?: number
+  /** Life a click here would pay for Phyrexian mana right now, or null. */
+  payLife?: number | null
 }): React.JSX.Element {
   const zoom = useTableScale()
   const prev = useRef(player.life)
@@ -241,7 +243,7 @@ export function Portrait({ player, state, card, onPlayer, size = 92 }: {
       <button
         data-pid={player.id}
         onClick={() => onPlayer(player)}
-        title={`${you ? 'You' : player.name} — ${player.life} life${'\n'}Click when a spell or ability asks you to choose a player.`}
+        title={payLife ? `Click to pay ${payLife} life instead of the Phyrexian mana` : `${you ? 'You' : player.name} — ${player.life} life${'\n'}Click when a spell or ability asks you to choose a player.`}
         className={`group relative rounded-full transition-transform hover:scale-105 ${player.lost ? 'opacity-40 grayscale' : ''}`}
         style={{ width: size, height: size }}
       >
@@ -249,7 +251,7 @@ export function Portrait({ player, state, card, onPlayer, size = 92 }: {
         <span className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(${ring} ${frac * 360}deg, rgba(255,255,255,0.1) 0)` }} />
         {/* Turn / target glow */}
         <span className={`absolute -inset-1.5 rounded-full transition-shadow ${
-          player.highlighted ? 'shadow-[0_0_24px_6px_rgba(248,113,113,0.75)]' : active ? 'shadow-[0_0_22px_4px_rgba(252,211,77,0.45)]' : ''
+          payLife ? 'animate-pulse shadow-[0_0_24px_6px_rgba(52,211,153,0.7)]' : player.highlighted ? 'shadow-[0_0_24px_6px_rgba(248,113,113,0.75)]' : active ? 'shadow-[0_0_22px_4px_rgba(252,211,77,0.45)]' : ''
         }`} />
         <span className="absolute inset-[4px] overflow-hidden rounded-full bg-[#1c1a26] ring-1 ring-black/60">
           {art

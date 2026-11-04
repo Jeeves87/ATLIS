@@ -25,6 +25,7 @@
  *    and forge-gui-desktop-*-jar-with-dependencies.jar.
  */
 import { spawn, execFile } from 'child_process'
+import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
@@ -231,32 +232,84 @@ export interface ExportResult {
   skipped: Array<{ name: string; reason: string }>
   /** Cards exported without a set because Forge's editions didn't know theirs. */
   unmatchedSets: number
+  /**
+   * Set when Scryfall couldn't be reached: decks kept their last export
+   * instead of being rewritten, and ones never exported are in `skipped`.
+   */
+  offline?: string
+}
+
+/** The .dck file a saved deck is (or would be) exported as. */
+export function deckFile(name: string): string {
+  return join(decksBase(installDir().dir), `${PREFIX}${safeFile(name)}.dck`)
 }
 
 /**
- * Write every saved deck that has a commander into Forge's commander deck
- * folder. Files ATLIS wrote before and that no longer match a deck are
- * removed; files the user made in Forge are never touched.
+ * Saved decks that can be played (they have a commander), with the file each
+ * exports to — straight from the database, no Scryfall and no writing, so a
+ * deck list costs nothing no matter how many decks there are.
  */
-export async function exportDecks(): Promise<ExportResult> {
+export function playableDecks(): Array<{ deckId: string; name: string; path: string }> {
+  const crowned = new Set(db.listMtgDeckCards().filter((c) => c.board === 'commander').map((c) => c.deck_id))
+  return db.listMtgDecks().filter((d) => crowned.has(d.id)).map((d) => ({ deckId: d.id, name: d.name, path: deckFile(d.name) }))
+}
+
+// What each deck's file was last written from, so an unchanged deck isn't
+// looked up on Scryfall and rewritten again.
+const EXPORT_SIG_KEY = 'forge_export_sigs'
+
+function exportSignature(rows: db.MtgDeckCard[], editions: Map<string, string>, forgeDir: string | null): string {
+  const lines = rows.map((r) => `${r.board}|${r.quantity}|${r.name}|${r.ext_id ?? ''}`).sort()
+  return createHash('sha1').update(JSON.stringify([forgeDir, editions.size, lines])).digest('hex')
+}
+
+/**
+ * Write saved decks that have a commander into Forge's commander deck folder.
+ * `only` limits it to those deck ids — what a game start uses, so starting a
+ * game costs the decks at the table, not the whole collection. A deck whose
+ * cards haven't changed since its file was written is left as it is.
+ *
+ * A full export (no `only`) also removes files ATLIS wrote before that no
+ * longer match a deck; files the user made in Forge are never touched.
+ */
+export async function exportDecks(opts: { only?: string[]; force?: boolean } = {}): Promise<ExportResult> {
   const { dir } = installDir()
   const decksDir = decksBase(dir)
   mkdirSync(decksDir, { recursive: true })
   const editions = editionMap(dir)
 
-  const all = db.listMtgDecks()
+  const only = opts.only ? new Set(opts.only) : null
+  const all = db.listMtgDecks().filter((d) => !only || only.has(d.id))
+  const allRows = new Map<string, db.MtgDeckCard[]>()
+  for (const c of db.listMtgDeckCards()) allRows.set(c.deck_id, [...(allRows.get(c.deck_id) ?? []), c])
+  let sigs: Record<string, string> = {}
+  try { sigs = JSON.parse(db.getSetting(EXPORT_SIG_KEY) || '{}') as Record<string, string> } catch { /* rebuild */ }
+  const sigOf = new Map(all.map((d) => [d.id, exportSignature(allRows.get(d.id) ?? [], editions, dir)]))
+  const fresh = (d: db.MtgDeck): boolean =>
+    !opts.force && sigs[d.id] === sigOf.get(d.id) && existsSync(join(decksDir, `${PREFIX}${safeFile(d.name)}.dck`))
+  // Only decks that actually need writing go to Scryfall.
   const rowsByDeck = new Map<string, db.MtgDeckCard[]>()
-  for (const c of db.listMtgDeckCards()) rowsByDeck.set(c.deck_id, [...(rowsByDeck.get(c.deck_id) ?? []), c])
+  for (const d of all) if (!fresh(d)) rowsByDeck.set(d.id, allRows.get(d.id) ?? [])
 
   // One Scryfall pass for every printing: set code and layout for each line,
   // and a printing for cards stored by name only.
+  // Without it (offline, DNS down, Scryfall having a bad day) the names and
+  // sets can't be written correctly, so each deck keeps the file it was last
+  // exported as rather than taking the whole deck list down with it.
   const ids = [...new Set([...rowsByDeck.values()].flat().map((c) => c.ext_id).filter((x): x is string => !!x))]
-  const byId = ids.length ? await mtg.cardsByIds(ids) : new Map<string, mtg.ScryfallCard>()
-  const nameOnly = [...new Set([...rowsByDeck.values()].flat().filter((c) => !c.ext_id || !byId.has(c.ext_id)).map((c) => c.name))]
+  let byId = new Map<string, mtg.ScryfallCard>()
   const byName = new Map<string, mtg.ScryfallCard>()
-  if (nameOnly.length) {
-    const r = await mtg.cardsByNames(nameOnly)
-    for (const c of r.found) byName.set(db.cardNameKey(c.name), c)
+  let offline: string | undefined
+  try {
+    if (ids.length) byId = await mtg.cardsByIds(ids)
+    const nameOnly = [...new Set([...rowsByDeck.values()].flat().filter((c) => !c.ext_id || !byId.has(c.ext_id)).map((c) => c.name))]
+    if (nameOnly.length) {
+      const r = await mtg.cardsByNames(nameOnly)
+      for (const c of r.found) byName.set(db.cardNameKey(c.name), c)
+    }
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string } }).cause?.code
+    offline = `Scryfall couldn't be reached${cause ? ` (${cause})` : ''}`
   }
 
   const written: string[] = []
@@ -273,10 +326,25 @@ export async function exportDecks(): Promise<ExportResult> {
   }
 
   for (const d of all) {
-    const rows = rowsByDeck.get(d.id) ?? []
+    const rows = allRows.get(d.id) ?? []
     const commanders = rows.filter((r) => r.board === 'commander')
     if (!commanders.length) { skipped.push({ name: d.name, reason: 'no commander set' }); continue }
     const fileBase = safeFile(d.name)
+    const file = join(decksDir, `${PREFIX}${fileBase}.dck`)
+    if (fresh(d)) {
+      written.push(fileBase)
+      files[d.id] = file
+      continue
+    }
+    if (offline) {
+      if (existsSync(file)) {
+        written.push(fileBase)
+        files[d.id] = file
+      } else {
+        skipped.push({ name: d.name, reason: `${offline}, and it hasn't been exported before` })
+      }
+      continue
+    }
     const text = [
       '[metadata]',
       `Name=${PREFIX}${d.name}`,
@@ -286,19 +354,23 @@ export async function exportDecks(): Promise<ExportResult> {
       ...rows.filter((r) => r.board === 'main').map(line),
       ''
     ].join('\r\n')
-    const file = join(decksDir, `${PREFIX}${fileBase}.dck`)
     writeFileSync(file, text, 'utf8')
     written.push(fileBase)
     files[d.id] = file
+    sigs[d.id] = sigOf.get(d.id) as string
   }
+  db.setSetting(EXPORT_SIG_KEY, JSON.stringify(sigs))
 
-  // Remove ATLIS exports for decks that were renamed or deleted.
-  for (const old of exportedFiles(decksDir)) {
-    if (!written.includes(old)) {
-      try { unlinkSync(join(decksDir, `${PREFIX}${old}.dck`)) } catch { /* in use or gone */ }
+  // Remove ATLIS exports for decks that were renamed or deleted. Only on a
+  // full export: a partial one doesn't know about the decks it left out.
+  if (!only) {
+    for (const old of exportedFiles(decksDir)) {
+      if (!written.includes(old)) {
+        try { unlinkSync(join(decksDir, `${PREFIX}${old}.dck`)) } catch { /* in use or gone */ }
+      }
     }
   }
-  return { decksDir, written, files, skipped, unmatchedSets }
+  return { decksDir, written, files, skipped, unmatchedSets, offline }
 }
 
 /** Start Forge detached, so closing ATLIS doesn't close the game. */

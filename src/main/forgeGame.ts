@@ -109,15 +109,14 @@ export function readiness(appRoot: string): { ok: boolean; problems: string[] } 
   return { ok: problems.length === 0, problems }
 }
 
-/** Your saved decks (exported fresh) and Forge's bundled Commander precons. */
+/**
+ * Your saved decks and Forge's bundled Commander precons — names and file
+ * paths only. Exporting your decks to Forge (Scryfall lookups for every card)
+ * waits for a game to start, and then covers only the decks at the table.
+ */
 export async function listDecks(): Promise<DeckOption[]> {
   const out: DeckOption[] = []
-  // Re-export so a deck edited a minute ago plays as edited.
-  const exported = await forge.exportDecks()
-  const names = new Map(db.listMtgDecks().map((d) => [d.id, d.name]))
-  for (const [deckId, path] of Object.entries(exported.files)) {
-    out.push({ path, name: names.get(deckId) ?? deckId, kind: 'atlis', deckId })
-  }
+  for (const d of forge.playableDecks()) out.push({ path: d.path, name: d.name, kind: 'atlis', deckId: d.deckId })
   const { dir } = forge.installDir()
   const preconDir = dir ? join(dir, 'res', 'quest', 'commanderprecons') : null
   if (preconDir && existsSync(preconDir)) {
@@ -146,6 +145,14 @@ export async function start(appRoot: string, opts: StartOptions, onEvent: (e: Ga
   if (!you) throw new Error('That deck needs a commander before it can be played (Decks tab → crown a card).')
   const opps = opts.opponents.map((p) => all.find((d) => d.path === p)).filter((d): d is DeckOption => !!d)
   if (!opps.length) throw new Error('Pick at least one opponent.')
+  // Write the saved decks at this table (and only those) so a deck edited a
+  // minute ago plays as edited. Unchanged ones are left as they are.
+  const atTable = [...new Set([you, ...opps].map((d) => d.deckId).filter((x): x is string => !!x))]
+  if (atTable.length) {
+    const r = await forge.exportDecks({ only: atTable })
+    const missing = [you, ...opps].filter((d) => d.deckId && !r.files[d.deckId])
+    if (missing.length) throw new Error(`Couldn't prepare ${missing.map((d) => d.name).join(', ')} for Forge: ${r.skipped.map((s) => s.reason).join('; ') || 'unknown reason'}.`)
+  }
 
   emit = onEvent
   lastState = null
