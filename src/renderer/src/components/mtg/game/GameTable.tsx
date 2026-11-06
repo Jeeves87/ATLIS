@@ -12,7 +12,7 @@
  * prompt says what it's waiting for.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Crown, Flag, Layers, Loader2, LogOut, Maximize2, Moon, Skull, Sparkles, Sunrise, Swords, Volume2, VolumeX, Wand2, X } from 'lucide-react'
+import { BookOpen, ChevronLeft, Crown, Eye, Flag, Layers, Loader2, LogOut, Maximize2, Moon, Skull, Sparkles, Star, Sunrise, Swords, Volume2, VolumeX, Wand2, X } from 'lucide-react'
 import GameCardView, { CARD_W, type CardSize, useTableScale } from './GameCardView'
 import RequestDialog from './RequestDialog'
 import Arrows from './Arrows'
@@ -48,7 +48,8 @@ const MANA: Array<{ k: keyof GamePlayer['mana']; byte: number; cls: string }> = 
   { k: 'B', byte: 4, cls: 'bg-zinc-700 text-white' },
   { k: 'R', byte: 8, cls: 'bg-red-500 text-white' },
   { k: 'G', byte: 16, cls: 'bg-emerald-600 text-white' },
-  { k: 'C', byte: 0, cls: 'bg-zinc-400 text-black' }
+  // Forge's ManaAtom code for colorless is 32 (0 is MagicColor's, which the pool doesn't use).
+  { k: 'C', byte: 32, cls: 'bg-zinc-400 text-black' }
 ]
 
 // ---------------------------------------------------------------- entry: setup or table
@@ -60,6 +61,24 @@ export default function PlayInAtlis({ onStatus }: { onStatus: (s: string | null)
     : <MatchSetup onStarted={() => setOpen(true)} onStatus={onStatus} />
 }
 
+// Favorite decks, kept in settings. A saved deck is keyed by its id (so a
+// rename keeps the star), a Forge precon by its file path.
+const FAV_KEY = 'play_favorite_decks'
+const favKey = (d: GameDeckOption): string => d.deckId ?? d.path
+const label = (d: GameDeckOption, fav: boolean): string =>
+  `${fav ? '★ ' : ''}${d.name}${d.kind === 'precon' ? ` (${d.set} ${d.year})` : ''}`
+
+/** Star button for the deck chosen in the select beside it. */
+function FavButton({ deck, fav, onToggle }: { deck: GameDeckOption | undefined; fav: boolean; onToggle: () => void }): React.JSX.Element {
+  return (
+    <button onClick={onToggle} disabled={!deck}
+      title={!deck ? 'Pick a deck to favorite it' : fav ? `Unfavorite ${deck.name}` : `Favorite ${deck.name} — favorites sit at the top of their list`}
+      className={`shrink-0 rounded border px-2 disabled:opacity-30 ${fav ? 'border-amber-400/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25' : 'border-white/10 text-white/40 hover:bg-white/10 hover:text-white/70'}`}>
+      <Star className="h-4 w-4" fill={fav ? 'currentColor' : 'none'} />
+    </button>
+  )
+}
+
 function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: (s: string | null) => void }): React.JSX.Element {
   const [ready, setReady] = useState<{ ok: boolean; problems: string[] } | null>(null)
   const [decks, setDecks] = useState<GameDeckOption[] | null>(null)
@@ -67,23 +86,46 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
   const [opps, setOpps] = useState<string[]>([''])
   const [filter, setFilter] = useState('')
   const [starting, setStarting] = useState(false)
+  const [favs, setFavs] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     void window.atlis.mtg.gameReadiness().then(setReady)
-    void window.atlis.mtg.gameDecks().then((d) => {
+    void Promise.all([
+      window.atlis.mtg.gameDecks(),
+      window.atlis.settings.getAll().then((all) => {
+        try { return new Set<string>(JSON.parse(all[FAV_KEY] || '[]') as string[]) } catch { return new Set<string>() }
+      })
+    ]).then(([d, f]) => {
+      setFavs(f)
       setDecks(d)
-      const own = d.filter((x) => x.kind === 'atlis')
-      const first = own[0] ?? d.find((x) => x.kind === 'precon')
+      // Start on a favorite when there is one.
+      const byFav = (a: GameDeckOption, b: GameDeckOption): number => Number(f.has(favKey(b))) - Number(f.has(favKey(a)))
+      const own = d.filter((x) => x.kind === 'atlis').sort((a, b) => byFav(a, b) || a.name.localeCompare(b.name))
+      const pre = d.filter((x) => x.kind === 'precon').sort(byFav)
+      const first = own[0] ?? pre[0]
       if (first) setMine(first.path)
-      const firstOpp = own[1] ?? d.find((x) => x.kind === 'precon' && x.path !== first?.path)
+      const firstOpp = [...pre.filter((x) => f.has(favKey(x))), ...own.slice(1), ...pre].find((x) => x.path !== first?.path)
       if (firstOpp) setOpps([firstOpp.path])
     }).catch((e) => onStatus(e instanceof Error ? e.message : String(e)))
   }, [onStatus])
 
-  const own = (decks ?? []).filter((d) => d.kind === 'atlis')
+  const isFav = (d: GameDeckOption | undefined): boolean => !!d && favs.has(favKey(d))
+  const toggleFav = (d: GameDeckOption | undefined): void => {
+    if (!d) return
+    setFavs((prev) => {
+      const next = new Set(prev)
+      if (next.has(favKey(d))) next.delete(favKey(d)); else next.add(favKey(d))
+      void window.atlis.settings.set(FAV_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }
+  // Favorites first in each list, then the list's usual order.
+  const favFirst = (a: GameDeckOption, b: GameDeckOption): number => Number(isFav(b)) - Number(isFav(a))
+  const byPath = new Map((decks ?? []).map((d) => [d.path, d]))
+  const own = (decks ?? []).filter((d) => d.kind === 'atlis').sort((a, b) => favFirst(a, b) || a.name.localeCompare(b.name))
   const allPrecons = (decks ?? []).filter((d) => d.kind === 'precon')
-    .sort((a, b) => (b.year ?? '').localeCompare(a.year ?? '') || a.name.localeCompare(b.name))
-  const precons = allPrecons.filter((d) => !filter || `${d.name} ${d.set ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => favFirst(a, b) || (b.year ?? '').localeCompare(a.year ?? '') || a.name.localeCompare(b.name))
+  const precons = allPrecons.filter((d) => !filter || isFav(d) || `${d.name} ${d.set ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
 
   const start = async (): Promise<void> => {
     setStarting(true)
@@ -113,18 +155,21 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
     <div className="max-w-2xl space-y-4">
       <div>
         <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-white/40">Your deck</div>
-        <select value={mine} onChange={(e) => setMine(e.target.value)} className={select}>
-          {own.length > 0 && (
-            <optgroup label="Your decks">
-              {own.map((d) => <option key={d.path} value={d.path}>{d.name}</option>)}
-            </optgroup>
-          )}
-          {allPrecons.length > 0 && (
-            <optgroup label="Commander precons">
-              {allPrecons.map((d) => <option key={d.path} value={d.path}>{d.name} ({d.set} {d.year})</option>)}
-            </optgroup>
-          )}
-        </select>
+        <div className="flex gap-2">
+          <select value={mine} onChange={(e) => setMine(e.target.value)} className={select}>
+            {own.length > 0 && (
+              <optgroup label="Your decks">
+                {own.map((d) => <option key={d.path} value={d.path}>{label(d, isFav(d))}</option>)}
+              </optgroup>
+            )}
+            {allPrecons.length > 0 && (
+              <optgroup label="Commander precons">
+                {allPrecons.map((d) => <option key={d.path} value={d.path}>{label(d, isFav(d))}</option>)}
+              </optgroup>
+            )}
+          </select>
+          <FavButton deck={byPath.get(mine)} fav={isFav(byPath.get(mine))} onToggle={() => toggleFav(byPath.get(mine))} />
+        </div>
       </div>
       <div>
         <div className="mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-white/40">
@@ -138,12 +183,13 @@ function MatchSetup({ onStarted, onStatus }: { onStarted: () => void; onStatus: 
               <select value={o} onChange={(e) => setOpps((p) => p.map((x, j) => (j === i ? e.target.value : x)))} className={select}>
                 <option value="">— choose —</option>
                 <optgroup label="Your decks">
-                  {own.filter((d) => d.path !== mine).map((d) => <option key={d.path} value={d.path}>{d.name}</option>)}
+                  {own.filter((d) => d.path !== mine).map((d) => <option key={d.path} value={d.path}>{label(d, isFav(d))}</option>)}
                 </optgroup>
                 <optgroup label="Forge Commander precons">
-                  {precons.map((d) => <option key={d.path} value={d.path}>{d.name} ({d.set} {d.year})</option>)}
+                  {precons.map((d) => <option key={d.path} value={d.path}>{label(d, isFav(d))}</option>)}
                 </optgroup>
               </select>
+              <FavButton deck={byPath.get(o)} fav={isFav(byPath.get(o))} onToggle={() => toggleFav(byPath.get(o))} />
               {opps.length > 1 && (
                 <button onClick={() => setOpps((p) => p.filter((_, j) => j !== i))} className="rounded border border-white/10 px-2 text-white/40 hover:bg-white/10"><X className="h-4 w-4" /></button>
               )}
@@ -182,7 +228,9 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
   const [toasts, setToasts] = useState<Toast[]>([])
   const [shake, setShake] = useState(false)
   const [crash, setCrash] = useState<string | null>(null)
-  const [reveal, setReveal] = useState<{ title: string; cards: number[]; labels: string[] } | null>(null)
+  const [reveal, setReveal] = useState<{ title: string; cards: number[]; labels: string[]; n: number } | null>(null)
+  // The reveal drawer, open or tucked against the left edge.
+  const [revealOpen, setRevealOpen] = useState(true)
   const root = useRef<HTMLDivElement>(null)
   // Zone changes between snapshots → card arrivals and leave-the-battlefield ghosts.
   const { fx, ghosts } = useZoneFx(state, root)
@@ -270,11 +318,12 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
         toast(forced ? `Attack not allowed: ${forced.headline}. ${forced.detail}.` : `${e.title ? `${e.title}: ` : ''}${e.message}`, forced ? 'rule' : undefined)
         break
       }
-      case 'reveal': setReveal({
+      case 'reveal': setReveal((prev) => ({
         title: e.title,
         cards: e.options.filter((o) => o.card != null).map((o) => o.card as number),
-        labels: e.options.filter((o) => o.card == null && !/^=+/.test(o.label)).map((o) => o.label)
-      }); break
+        labels: e.options.filter((o) => o.card == null && !/^=+/.test(o.label)).map((o) => o.label),
+        n: (prev?.n ?? 0) + 1
+      })); setRevealOpen(true); break
       case 'error': toast(e.message, 'error'); break
       case 'exited': if (e.code) { setCrash(e.detail ?? `exit ${e.code}`); setPhase('crashed') } break
       default: break
@@ -369,6 +418,13 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
   }, [state, you, send])
   const onCard = useCallback((c: GameCard) => {
     lastClicked.current = c.id
+    // A card a permanent's rule won't let you cast (Rule of Law after your
+    // first spell…): say which one and why, instead of a silent refusal. Not
+    // while Forge is asking you to pick cards — discarding it is still fine.
+    if (c.cantCast?.length && !c.selectable && (c.zone === 'Hand' || c.zone === 'Command')) {
+      toast(whyCantCast(c), 'rule')
+      return
+    }
     // Attacked, but blocks aren't declared yet (attack triggers on the stack): a click on
     // your creature would be read as using an ability, and Forge just refuses it.
     if (!blocking && state && attackedBeforeBlocks(state) && c.controller === state.you && c.creature && !c.playable) {
@@ -554,17 +610,32 @@ export function GameTable({ onExit, onStatus }: { onExit: () => void; onStatus: 
         </div>
 
         {reveal && (
-          // Non-blocking: the game keeps going while you look.
-          <div className="absolute left-1/2 top-12 z-40 w-[min(720px,90%)] -translate-x-1/2 rounded-xl border border-white/15 bg-[#17171f]/95 p-3 shadow-2xl">
-            <div className="mb-2 flex items-start gap-2">
-              <div className="flex-1 whitespace-pre-line text-[13px] font-medium">{reveal.title}</div>
-              <button onClick={() => setReveal(null)} className="rounded p-1 text-white/50 hover:bg-white/10"><X className="h-4 w-4" /></button>
+          // Non-blocking: the game keeps going while you look. A drawer out of the
+          // left edge, mid-height, where your eyes already are; click it to tuck
+          // it back to the edge, click the tab to bring it out again.
+          revealOpen ? (
+            <div key={reveal.n} className="absolute left-0 top-[58%] z-40 max-w-[min(640px,60%)] -translate-y-1/2 cursor-pointer rounded-r-xl border border-l-0 border-white/15 bg-[#17171f]/95 py-3 pl-4 pr-3 shadow-2xl backdrop-blur"
+              style={{ animation: 'atlis-drawer 0.28s cubic-bezier(.2,.9,.3,1)' }}
+              onClick={() => setRevealOpen(false)} title="Click to tuck it away">
+              <style>{'@keyframes atlis-drawer{from{transform:translateX(-100%)}to{transform:translateX(0)}}'}</style>
+              <div className="mb-2 flex items-start gap-2">
+                <Eye className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
+                <div className="flex-1 whitespace-pre-line text-[13px] font-medium">{reveal.title}</div>
+                <button onClick={(e) => { e.stopPropagation(); setRevealOpen(false) }} title="Tuck away" className="rounded p-1 text-white/50 hover:bg-white/10"><ChevronLeft className="h-4 w-4" /></button>
+                <button onClick={(e) => { e.stopPropagation(); setReveal(null) }} title="Dismiss" className="rounded p-1 text-white/50 hover:bg-white/10"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="flex max-h-[46vh] flex-wrap gap-2 overflow-y-auto">
+                {reveal.cards.map((id) => { const c = card(id); return c ? <GameCardView key={id} card={{ ...c, tapped: false }} size="md" onHover={setHover} /> : null })}
+                {reveal.labels.map((l) => <span key={l} className="rounded bg-white/5 px-2 py-1 text-[12px] text-white/70">{l}</span>)}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {reveal.cards.map((id) => { const c = card(id); return c ? <GameCardView key={id} card={{ ...c, tapped: false }} size="md" onHover={setHover} /> : null })}
-              {reveal.labels.map((l) => <span key={l} className="rounded bg-white/5 px-2 py-1 text-[12px] text-white/70">{l}</span>)}
-            </div>
-          </div>
+          ) : (
+            <button onClick={() => setRevealOpen(true)} title={`Show: ${reveal.title.split('\n')[0]}`}
+              className="absolute left-0 top-[58%] z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-r-lg border border-l-0 border-violet-400/40 bg-[#1b1830]/95 px-1.5 py-2.5 text-violet-200 shadow-lg hover:bg-[#262046]">
+              <Eye className="h-4 w-4" />
+              <span className="text-[11px] font-semibold tabular-nums">{reveal.cards.length || reveal.labels.length}</span>
+            </button>
+          )
         )}
         {zone && <ZoneViewer state={state} zone={zone} card={card} onCard={onCard} onHover={setHover} onClose={() => setZone(null)} />}
         {requests[0] && <RequestDialog key={requests[0].rid} req={requests[0]} state={state} onAnswer={answer} onHover={setHover} />}
@@ -1255,6 +1326,15 @@ export function whyCantBlock(blocker: GameCard | undefined, attacker: GameCard |
 }
 
 /** Why this creature can't block any of the attackers coming at you. */
+/** Why a card in hand can't be cast, naming the permanent whose rule stops it. */
+export function whyCantCast(c: GameCard): string {
+  const name = (c.name ?? 'That card').split(',')[0]
+  const rules = (c.cantCast ?? []).map((b) => `${b.name}: “${b.text.trim()}”`)
+  const once = (c.cantCast ?? []).some((b) => /more than one .*spell/i.test(b.text))
+  const tail = (c.cantCast ?? []).every((b) => !/activate/i.test(b.text)) ? ' Lands and abilities still work.' : ''
+  return `${name} can’t be cast right now — ${rules.join(' · ')}${once ? ' You’ve already cast your spell this turn.' : ''}${tail}`
+}
+
 export function whyCantBlockAny(s: GameState, blocker: GameCard): string {
   const at = s.combat.filter((c) => c.defender === s.you || s.cards[String(c.defender)]?.controller === s.you)
     .map((c) => s.cards[String(c.attacker)])
@@ -1404,6 +1484,10 @@ function StackSpotlight({ state, card, onHover, at }: {
   const who = state.players.find((p) => p.id === top.controller)
   const img = src?.art ? scryfallImage(src.art, 'normal') : null
   const mine = who?.id === state.you
+  // Forge is waiting for you to pick a card (the legend rule, a sacrifice, a
+  // target…). The spotlight sits over the mat and could cover the very card
+  // you need, so step aside: fade out and let clicks through to the board.
+  const picking = Object.values(state.cards).some((c) => c.selectable && c.zone === 'Battlefield')
   return (
     // Over the open mat on the right of your area, card over its caption: clear of your
     // creatures and hand, and of the turn rail's pill (≈240 units) reaching in from the right.
@@ -1411,7 +1495,7 @@ function StackSpotlight({ state, card, onHover, at }: {
       style={{ left: `calc(${at.right}% - ${Math.round(((at.byRail ? 290 : 24) + 170) * zoom)}px)`, top: `${at.top}%` }}>
       <div style={{ zoom }}>
       <div key={top.id} onMouseEnter={() => onHover(src ?? null)} onMouseLeave={() => onHover(null)}
-        className="pointer-events-auto flex flex-col items-center gap-2"
+        className={`flex flex-col items-center gap-2 transition-opacity duration-200 ${picking ? 'pointer-events-none opacity-25' : 'pointer-events-auto'}`}
         style={{ animation: 'atlis-spotlight 0.45s cubic-bezier(.2,.9,.3,1.2)' }}>
         <div data-stack={top.id} className={`relative w-[150px] shrink-0 overflow-hidden rounded-[10px] ring-2 ${mine ? 'ring-violet-300/70 shadow-[0_0_40px_8px_rgba(167,139,250,0.45)]' : 'ring-red-300/70 shadow-[0_0_40px_8px_rgba(248,113,113,0.4)]'}`}>
           {img

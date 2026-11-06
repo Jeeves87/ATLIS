@@ -8,6 +8,29 @@ import { ArrowDown, ArrowUp, Check, Minus, Plus } from 'lucide-react'
 import GameCardView from './GameCardView'
 import type { GameCard, GameRequest, GameState } from '../../../types'
 
+/**
+ * One way to play a card, in plain words. Forge labels every option with the
+ * card's own name and type line ("Grizzly Bears - Creature 2 / 2"), so a normal
+ * cast and an alternative one (Aluren's free cast, flashback, …) read the same
+ * until the very end. Lead with what's different.
+ */
+export function abilityLabel(label: string, host: GameCard | null): { title: string; note: string | null; free: boolean } {
+  let rest = label
+  if (host?.name && rest.startsWith(`${host.name} - `)) rest = rest.slice(host.name.length + 3)
+  // "<spell> by Aluren (227) (without paying its mana cost and as though it has flash)"
+  const by = /^(.*?)\s+by\s+(.+?)\s+\(\d+\)\s*(?:\((.+)\))?\s*$/.exec(rest)
+  if (by) {
+    const how = by[3] ?? ''
+    const free = /without paying/i.test(how)
+    return { title: free ? `Cast for free — ${by[2]}` : `Cast using ${by[2]}`, note: how ? `${how[0].toUpperCase()}${how.slice(1)}.` : null, free }
+  }
+  const free = /without paying/i.test(rest)
+  if (host && /^(Creature|Instant|Sorcery|Artifact|Enchantment|Planeswalker|Battle|Legendary|Tribal|Kindred|Snow|Basic)\b/.test(rest) && !/:/.test(rest)) {
+    return { title: host.manaCost ? `Cast normally — pay ${host.manaCost}` : 'Cast normally', note: null, free }
+  }
+  return { title: rest, note: null, free }
+}
+
 export default function RequestDialog({
   req, state, onAnswer, onHover
 }: {
@@ -26,7 +49,8 @@ export default function RequestDialog({
   const [filter, setFilter] = useState('')
   const cardOf = (id?: number): GameCard | null => (id != null && state ? state.cards[String(id)] ?? null : null)
   const source = cardOf(req.card)
-  const anyCards = useMemo(() => opts.some((o) => o.card != null), [opts])
+  // Abilities all belong to one card (shown in the header), so they list as text.
+  const anyCards = useMemo(() => req.kind !== 'ability' && opts.some((o) => o.card != null), [opts, req.kind])
 
   const toggle = (i: number): void => {
     setPicked((p) => {
@@ -168,12 +192,18 @@ export default function RequestDialog({
                 </div>
               )
             }
+            const ab = req.kind === 'ability' ? abilityLabel(o.label, cardOf(o.card) ?? source) : null
             return (
               <button key={o.i} onClick={() => toggle(o.i)} onDoubleClick={() => req.max === 1 && onAnswer(req.rid, [o.i])}
-                disabled={o.canPlay === false}
+                disabled={o.canPlay === false} title={o.label}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm disabled:opacity-40 ${on ? 'bg-amber-500/20 text-amber-50' : 'bg-white/[0.04] hover:bg-white/[0.08]'}`}>
                 <span className={`h-3.5 w-3.5 shrink-0 rounded-sm border ${on ? 'border-amber-300 bg-amber-300' : 'border-white/30'}`} />
-                <span className="flex-1">{o.label}</span>
+                {ab ? (
+                  <span className="flex-1">
+                    <span className={ab.free ? 'font-medium text-emerald-200' : ''}>{ab.title}</span>
+                    {ab.note && <span className="block text-[11px] text-white/45">{ab.note}</span>}
+                  </span>
+                ) : <span className="flex-1">{o.label}</span>}
               </button>
             )
           })}

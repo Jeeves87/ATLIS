@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, Bookmark, Check, Compass, Copy, Crown, ExternalLink, Layers, Loader2, Minus, Pencil, Plus,
+  ArrowLeft, Bookmark, Check, Compass, Copy, Crown, ExternalLink, LayoutGrid, Layers, List, Loader2, Minus, Pencil, Plus,
   RefreshCw, Search, Trash2, Trophy, Upload, X
 } from 'lucide-react'
 import ProductThumb, { ImageZoom } from './ProductThumb'
@@ -689,6 +689,15 @@ function DeckView({
   const [zoomed, setZoomed] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [pane, setPane] = useState<'cards' | 'combos' | 'upgrades'>('cards')
+  // Card pictures or the compact text list; remembered per viewer.
+  const [layout, setLayoutState] = useState<'grid' | 'list'>(() => {
+    try { return localStorage.getItem(LAYOUT_KEY) === 'list' ? 'list' : 'grid' } catch { return 'grid' }
+  })
+  const setLayout = (l: 'grid' | 'list'): void => {
+    setLayoutState(l)
+    try { localStorage.setItem(LAYOUT_KEY, l) } catch { /* private window */ }
+  }
+  const [hover, setHover] = useState<{ ext_id: string; name: string; rect: DOMRect } | null>(null)
   // Bumped on every edit so the EDHREC panels re-score against the new list.
   const [revision, setRevision] = useState(0)
   const editable = open.kind === 'deck'
@@ -903,6 +912,14 @@ function DeckView({
             className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-[11px] text-white/50 hover:bg-white/10">
             <Copy className="h-3 w-3" /> Copy list
           </button>
+          <div className="ml-auto flex overflow-hidden rounded border border-white/10">
+            {([['grid', LayoutGrid, 'Card pictures — hover one to read it'], ['list', List, 'Compact list']] as const).map(([id, Icon, tip]) => (
+              <button key={id} onClick={() => setLayout(id)} title={tip}
+                className={`px-1.5 py-1 ${layout === id ? 'bg-violet-500/20 text-violet-200' : 'text-white/40 hover:bg-white/10'}`}>
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -911,6 +928,22 @@ function DeckView({
               <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-white/35">
                 {section} <span className="text-white/25">{cards.reduce((n, c) => n + c.quantity, 0)}</span>
               </div>
+              {layout === 'grid' ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(124px,1fr))] gap-2">
+                  {cards.map((c) => (
+                    <CardTile
+                      key={`${c.board}:${c.name_key}`}
+                      card={c}
+                      editable={editable}
+                      active={preview?.key === c.name_key}
+                      onPreview={() => setPreview({ key: c.name_key, name: c.name, ext_id: c.ext_id })}
+                      onHover={(rect) => setHover(rect && c.ext_id ? { ext_id: c.ext_id, name: c.name, rect } : null)}
+                      onQty={(q) => deckId && void act(() => window.atlis.mtg.deckSetCard(deckId, { name: c.name, ext_id: c.ext_id, quantity: q, board: c.board }))}
+                      onCrown={() => deckId && void act(() => window.atlis.mtg.deckMoveCard(deckId, c.name, c.board === 'commander' ? 'main' : 'commander'))}
+                    />
+                  ))}
+                </div>
+              ) : (
               <div className="divide-y divide-white/5 rounded-md border border-white/10 bg-white/[0.02]">
                 {cards.map((c) => (
                   <CardRow
@@ -924,6 +957,7 @@ function DeckView({
                   />
                 ))}
               </div>
+              )}
             </div>
           ))}
           {grouped.length === 0 && (
@@ -973,10 +1007,95 @@ function DeckView({
           />
         )}
       </aside>
+      {hover && layout === 'grid' && <HoverZoom {...hover} />}
       {zoomed && preview?.ext_id && (() => {
         const large = scryfallImage(preview.ext_id, 'large')
         return large ? <ImageZoom image={large} name={preview.name} onClose={() => setZoomed(false)} /> : null
       })()}
+    </div>
+  )
+}
+
+const LAYOUT_KEY = 'atlis.deck.layout'
+
+/** A card's picture: Scryfall's CDN, then its API redirect, then the name on a blank card. */
+function CardImg({ extId, name, className = '' }: { extId: string | null; name: string; className?: string }): React.JSX.Element {
+  const img = extId ? scryfallImage(extId, 'normal') : null
+  const [stage, setStage] = useState(0)
+  useEffect(() => setStage(0), [extId])
+  const src = !img ? null : stage === 0 ? img.src : stage === 1 ? img.fallback : null
+  return src ? (
+    <img src={src} alt={name} loading="lazy" draggable={false} onError={() => setStage((n) => n + 1)}
+      className={`block aspect-[5/7] w-full rounded-[6%/4.3%] bg-white/[0.05] object-cover ${className}`} />
+  ) : (
+    <div className={`flex aspect-[5/7] w-full items-start rounded-[6%/4.3%] border border-white/10 bg-gradient-to-b from-[#26262f] to-[#15151b] p-2 text-[11px] font-medium text-white/70 ${className}`}>{name}</div>
+  )
+}
+
+/**
+ * One card of the deck as a picture. Hovering shows it big enough to read
+ * (HoverZoom); clicking puts it in the side preview, as a list row does.
+ */
+function CardTile({
+  card: c, editable, active, onPreview, onHover, onQty, onCrown
+}: {
+  card: MtgDeckCardView
+  editable: boolean
+  active: boolean
+  onPreview: () => void
+  onHover: (rect: DOMRect | null) => void
+  onQty: (q: number) => void
+  onCrown: () => void
+}): React.JSX.Element {
+  const have = Math.min(c.owned, c.quantity)
+  const status = c.basic || have >= c.quantity ? 'owned' : have > 0 ? 'partial' : 'missing'
+  return (
+    <div className="group relative" onMouseEnter={(e) => onHover(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => onHover(null)}>
+      <button onClick={onPreview} className={`block w-full rounded-[7px] ${active ? 'ring-2 ring-violet-400' : !c.in_identity ? 'ring-2 ring-red-400/70' : ''}`}
+        title={c.in_identity ? undefined : 'Outside the commander’s colour identity'}>
+        <CardImg extId={c.ext_id} name={c.name} className={status === 'missing' ? 'opacity-55 saturate-50' : ''} />
+      </button>
+      {c.quantity > 1 && (
+        <span className="pointer-events-none absolute left-1 top-[14%] rounded bg-black/80 px-1.5 text-[11px] font-semibold tabular-nums text-white">×{c.quantity}</span>
+      )}
+      <div className="mt-1 flex items-center gap-1 text-[10px]">
+        <span title={status === 'owned' ? `Owned (${c.owned})` : status === 'partial' ? `Own ${have} of ${c.quantity}` : 'Not owned'}
+          className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full ${
+            status === 'owned' ? 'bg-emerald-500/25 text-emerald-300' : status === 'partial' ? 'bg-amber-500/25 text-amber-200' : 'bg-red-500/20 text-red-300'}`}>
+          {status === 'owned' ? <Check className="h-2 w-2" /> : <X className="h-2 w-2" />}
+        </span>
+        {c.other_decks.length > 0 && (
+          <span title={`Also in: ${c.other_decks.join(', ')}`} className="rounded bg-white/5 px-1 text-white/40">+{c.other_decks.length}</span>
+        )}
+        <span className={`ml-auto tabular-nums ${status === 'owned' ? 'text-white/35' : 'text-amber-200/80'}`}>{c.basic ? '' : money(c.price)}</span>
+      </div>
+      {editable && (
+        <span className="absolute inset-x-1 bottom-6 flex justify-center gap-0.5 rounded-md bg-black/80 p-0.5 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+          <button onClick={onCrown} title={c.board === 'commander' ? 'Move to the 99' : 'Make commander'}
+            className={`rounded p-1 hover:bg-white/15 ${c.board === 'commander' ? 'text-amber-300' : 'text-white/60'}`}><Crown className="h-3 w-3" /></button>
+          {c.board === 'main' && (
+            <>
+              <button onClick={() => onQty(c.quantity - 1)} title="One fewer" className="rounded p-1 text-white/60 hover:bg-white/15"><Minus className="h-3 w-3" /></button>
+              <button onClick={() => onQty(c.quantity + 1)} title="One more" className="rounded p-1 text-white/60 hover:bg-white/15"><Plus className="h-3 w-3" /></button>
+            </>
+          )}
+          <button onClick={() => onQty(0)} title="Remove" className="rounded p-1 text-white/60 hover:bg-red-500/30 hover:text-red-200"><Trash2 className="h-3 w-3" /></button>
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** The hovered card, big enough to read, beside the tile (left of it near the right edge). */
+function HoverZoom({ ext_id, name, rect }: { ext_id: string; name: string; rect: DOMRect }): React.JSX.Element {
+  const W = 300
+  const H = Math.round(W * 7 / 5)
+  const gap = 12
+  const left = rect.right + gap + W <= window.innerWidth ? rect.right + gap : Math.max(8, rect.left - gap - W)
+  const top = Math.max(8, Math.min(rect.top + rect.height / 2 - H / 2, window.innerHeight - H - 8))
+  return (
+    <div className="pointer-events-none fixed z-50 drop-shadow-[0_12px_30px_rgba(0,0,0,0.7)]" style={{ left, top, width: W }}>
+      <CardImg extId={ext_id} name={name} />
     </div>
   )
 }

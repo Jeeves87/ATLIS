@@ -92,11 +92,13 @@ final class Snapshot {
         o.addProperty("highlighted", gui.isHighlighted(p));
 
         JsonObject mana = new JsonObject();
-        // Forge's mana byte constants: W=1, U=2, B=4, R=8, G=16, colorless=0.
-        String[] names = { "W", "U", "B", "R", "G" };
-        byte[] bits = { 1, 2, 4, 8, 16 };
+        // The pool is keyed by Forge's ManaAtom codes: W=1, U=2, B=4, R=8, G=16,
+        // colorless=32. (MagicColor's colorless is 0, but the pool never uses
+        // it: reading 0 showed every {C} - Eldrazi Spawn, Sol Ring - as none.)
+        String[] names = { "W", "U", "B", "R", "G", "C" };
+        byte[] bits = { forge.card.mana.ManaAtom.WHITE, forge.card.mana.ManaAtom.BLUE, forge.card.mana.ManaAtom.BLACK,
+            forge.card.mana.ManaAtom.RED, forge.card.mana.ManaAtom.GREEN, forge.card.mana.ManaAtom.COLORLESS };
         for (int i = 0; i < names.length; i++) mana.addProperty(names[i], p.getMana(bits[i]));
-        mana.addProperty("C", p.getMana((byte) 0));
         o.add("mana", mana);
 
         // Commander: who commands what, how often it was cast (tax), and the
@@ -149,7 +151,69 @@ final class Snapshot {
             // optional detail
         }
         o.add("zones", zones);
+        // Why a card you hold can't be cast: the permanents whose "can't be
+        // cast" rule stops it right now (Rule of Law after your first spell,
+        // Teferi at instant speed, Grand Abolisher on its owner's turn…).
+        if (gui.seat() != null && p.getId() == gui.seat().getId() && game != null) {
+            try {
+                forge.game.player.Player me = null;
+                for (forge.game.player.Player pl : game.getPlayers()) if (pl.getId() == p.getId()) me = pl;
+                if (me != null) {
+                    for (ZoneType z : new ZoneType[] { ZoneType.Hand, ZoneType.Command }) {
+                        for (CardView v : nn(p.getCards(z))) {
+                            Card real = game.findById(v.getId());
+                            JsonObject co = cards.getAsJsonObject(String.valueOf(v.getId()));
+                            if (real == null || co == null) continue;
+                            JsonArray why = castBlockers(real, me);
+                            if (why.size() > 0) co.add("cantCast", why);
+                        }
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                // optional detail
+            }
+        }
         return o;
+    }
+
+    /**
+     * The static "can't be cast" rules stopping every way to cast this card,
+     * each as {id, name, text} of the permanent that has it. Mirrors Forge's
+     * StaticAbilityCantBeCast.cantBeCastAbility, but keeps who said no.
+     * Empty when at least one way to cast it isn't stopped by any of them.
+     */
+    private JsonArray castBlockers(Card card, forge.game.player.Player me) {
+        JsonArray out = new JsonArray();
+        Set<Integer> got = new HashSet<>();
+        boolean anyFree = false;
+        boolean anySpell = false;
+        forge.game.spellability.SpellAbility before = card.getCastSA();
+        try {
+            for (forge.game.spellability.SpellAbility sa : card.getSpells()) {
+                anySpell = true;
+                card.setCastSA(sa);
+                boolean stopped = false;
+                for (Card src : game.getCardsIn(ZoneType.STATIC_ABILITIES_SOURCE_ZONES)) {
+                    for (forge.game.staticability.StaticAbility st : src.getStaticAbilities()) {
+                        if (!st.checkConditions(forge.game.staticability.StaticAbilityMode.CantBeCast)) continue;
+                        if (!forge.game.staticability.StaticAbilityCantBeCast.applyCantBeCastAbility(st, sa, card, me)) continue;
+                        stopped = true;
+                        if (got.add(src.getId())) {
+                            JsonObject b = new JsonObject();
+                            b.addProperty("id", src.getId());
+                            b.addProperty("name", src.getName());
+                            String d = st.hasParam("Description") ? st.getParam("Description") : st.toString();
+                            b.addProperty("text", d == null ? "" : d.replace("CARDNAME", src.getName()));
+                            out.add(b);
+                        }
+                    }
+                }
+                if (!stopped) anyFree = true;
+            }
+        } finally {
+            card.setCastSA(before);
+        }
+        return anySpell && !anyFree ? out : new JsonArray();
     }
 
     private JsonArray zone(Iterable<CardView> list) {

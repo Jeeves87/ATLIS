@@ -48,7 +48,7 @@ const ringOf = (c: GameCard): string => {
   if (c.canBlock && !c.blocking) return 'outline outline-2 outline-dashed outline-sky-400'
   if (c.blocking) return 'ring-2 ring-sky-400'
   if (c.autoTap) return 'ring-2 ring-sky-400/80'
-  if (c.playable) return 'ring-2 ring-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
+  if (c.playable && !c.cantCast?.length) return 'ring-2 ring-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
   return 'ring-1 ring-black/40'
 }
 

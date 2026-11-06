@@ -1173,6 +1173,8 @@ export interface GameCard {
   canBlock?: boolean
   /** During blocks: the attackers (coming at you) this creature may legally block. */
   blocks?: number[]
+  /** In your hand or command zone: the permanents whose rules stop it being cast right now (Rule of Law, Teferi…). */
+  cantCast?: Array<{ id: number; name: string; text: string }>
   /** Must attack this combat (goad, "attacks each combat if able"); Forge rejects declarations without it. */
   mustAttack?: boolean
   /** Players who goaded it: it must attack someone else if it can. */

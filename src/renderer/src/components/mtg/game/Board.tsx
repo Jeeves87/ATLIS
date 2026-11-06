@@ -301,8 +301,13 @@ function PlayerCounters({ counters }: { counters: Record<string, number> | undef
 // ---------------------------------------------------------------- hand
 
 /**
- * Your hand, fanned along an arc at the bottom edge. Hovering a card lifts it
- * out of the fan, straightens it, and brings it to the front.
+ * Your hand, fanned along an arc at the bottom edge. The card under the
+ * pointer lifts out of the fan, straightens, and its neighbours slide apart.
+ *
+ * Which card that is comes from where the pointer sits ALONG the fan (each
+ * card owns an equal slice), not from per-card hover: with a big hand the
+ * cards overlap and tilt, and a lifted card covers its neighbours, so
+ * hit-testing the cards themselves made the pick jump and flicker.
  */
 export function Hand({ ids, card, onCard, onHover }: { ids: number[]; card: CardLookup; onCard: OnCard; onHover: OnHover }): React.JSX.Element {
   const scale = useTableScale()
@@ -324,19 +329,39 @@ export function Hand({ ids, card, onCard, onHover }: { ids: number[]; card: Card
   const tilt = Math.min(6, 44 / Math.max(1, n))
   // The bottom of each card sits off the table edge; hovering lifts it out.
   const sink = Math.round(h * 0.28)
+  const [focus, setFocus] = useState<number | null>(null)
+  const focused = focus != null && focus < n ? cards[focus] : null
+  useEffect(() => { onHover(focused) }, [focused?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Make room around the lifted card so its neighbours stay readable and clickable.
+  const room = Math.max(0, w * 0.62 - step)
+  const pick = (e: React.MouseEvent): void => {
+    if (!n || !box.current) return
+    const r = box.current.getBoundingClientRect()
+    const x = (e.clientX - r.left) / ((r.width || 1) / width) - width / 2
+    const span = (n - 1) * step
+    // Outside the fan (a short hand in a wide row) picks nothing.
+    if (Math.abs(x) > span / 2 + w / 2) { setFocus(null); return }
+    setFocus(n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(x / step + (n - 1) / 2))))
+  }
   return (
-    <div ref={box} className="relative w-full" style={{ height: h - sink + 8 }}>
+    <div ref={box} className="relative w-full" style={{ height: h - sink + 8 }}
+      onMouseMove={pick} onMouseLeave={() => setFocus(null)}
+      onClick={() => focused && onCard(focused)}>
       {cards.map((c, i) => {
         const off = i - (n - 1) / 2
+        const d = focus == null ? 0 : i - focus
+        const push = d === 0 ? 0 : Math.sign(d) * room * Math.max(0.35, 1 / Math.abs(d))
         const style = {
-          left: `calc(50% + ${off * step - w / 2}px)`,
+          left: `calc(50% + ${off * step - w / 2 + push}px)`,
           bottom: -sink - Math.abs(off) ** 2 * tilt * 0.55,
           '--rot': `${off * tilt}deg`,
-          zIndex: i
+          zIndex: d === 0 && focus != null ? 60 : i
         } as React.CSSProperties
         return (
-          <div key={c.id} className="atlis-hand-card absolute" style={style}>
-            <GameCardView card={c} size="lg" onClick={onCard} onHover={onHover} />
+          // Only the lifted card takes the pointer: it reaches above this row, and
+          // being over it must still count as being over the hand.
+          <div key={c.id} className={`atlis-hand-card absolute ${d === 0 && focus != null ? 'atlis-hand-up cursor-pointer' : 'pointer-events-none'}`} style={style}>
+            <GameCardView card={c} size="lg" />
           </div>
         )
       })}
@@ -346,8 +371,8 @@ export function Hand({ ids, card, onCard, onHover }: { ids: number[]; card: Card
 }
 
 export const HAND_CSS = `
-.atlis-hand-card{transform-origin:50% 120%;transform:rotate(var(--rot));transition:transform .18s ease-out, bottom .18s ease-out}
-.atlis-hand-card:hover{transform:translateY(-34%) rotate(0deg) scale(1.12);z-index:60 !important}
+.atlis-hand-card{transform-origin:50% 120%;transform:rotate(var(--rot));transition:transform .16s ease-out, bottom .16s ease-out, left .16s ease-out}
+.atlis-hand-card.atlis-hand-up{transform:translateY(-34%) rotate(0deg) scale(1.12)}
 `
 
 // ---------------------------------------------------------------- heads-up
